@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ontox"
+version = "0.1.0"
+description = "OntoX Python SDK for the ontology platform"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["requests>=2.31.0"]
+license = { text = "MIT" }
+
+[tool.setuptools]
+packages = ["ontox", "ontox.resources", "ontox.utils"]
+

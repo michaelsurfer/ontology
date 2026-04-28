@@ -1,0 +1,63 @@
+<svg width="960" height="540" viewBox="0 0 960 540" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Empty entities illustration">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F7F9FC"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1976D2"/>
+      <stop offset="1" stop-color="#42A5F5"/>
+    </linearGradient>
+    <filter id="shadow" x="-30" y="-30" width="1020" height="600" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0B1F33" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="960" height="540" fill="#FFFFFF"/>
+
+  <!-- Subtle dots -->
+  <g opacity="0.15">
+    <circle cx="110" cy="120" r="2.5" fill="#1976D2"/>
+    <circle cx="160" cy="90" r="2.5" fill="#1976D2"/>
+    <circle cx="210" cy="140" r="2.5" fill="#1976D2"/>
+    <circle cx="770" cy="140" r="2.5" fill="#1976D2"/>
+    <circle cx="820" cy="110" r="2.5" fill="#1976D2"/>
+    <circle cx="860" cy="170" r="2.5" fill="#1976D2"/>
+  </g>
+
+  <!-- Main card group -->
+  <g filter="url(#shadow)">
+    <!-- Card stack -->
+    <rect x="235" y="150" width="490" height="270" rx="20" fill="url(#card)" stroke="#E3E8EF" stroke-width="2"/>
+    <rect x="260" y="175" width="440" height="46" rx="14" fill="#FFFFFF" stroke="#E3E8EF" stroke-width="2"/>
+    <rect x="260" y="238" width="440" height="46" rx="14" fill="#FFFFFF" stroke="#E3E8EF" stroke-width="2"/>
+    <rect x="260" y="301" width="440" height="46" rx="14" fill="#FFFFFF" stroke="#E3E8EF" stroke-width="2"/>
+
+    <!-- Small table glyphs -->
+    <g opacity="0.55">
+      <rect x="286" y="191" width="74" height="16" rx="8" fill="#A7B3C2"/>
+      <rect x="286" y="254" width="110" height="16" rx="8" fill="#A7B3C2"/>
+      <rect x="286" y="317" width="92" height="16" rx="8" fill="#A7B3C2"/>
+    </g>
+
+    <!-- Plus button -->
+    <circle cx="671" cy="332" r="34" fill="url(#accent)"/>
+    <path d="M671 314V350" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+    <path d="M653 332H689" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- Simple node/edge hints (ontology/graph vibe) -->
+  <g opacity="0.85">
+    <path d="M160 360C250 330 270 310 330 260" stroke="#1976D2" stroke-width="3" stroke-linecap="round"/>
+    <path d="M800 360C700 330 680 310 630 275" stroke="#1976D2" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="150" cy="365" r="10" fill="#FFFFFF" stroke="#1976D2" stroke-width="3"/>
+    <circle cx="810" cy="365" r="10" fill="#FFFFFF" stroke="#1976D2" stroke-width="3"/>
+    <circle cx="340" cy="255" r="10" fill="#FFFFFF" stroke="#1976D2" stroke-width="3"/>
+    <circle cx="620" cy="270" r="10" fill="#FFFFFF" stroke="#1976D2" stroke-width="3"/>
+  </g>
+
+  <!-- Footer line -->
+  <rect x="330" y="438" width="300" height="8" rx="4" fill="#EEF3FA"/>
+</svg>
+

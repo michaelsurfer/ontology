@@ -1,0 +1,15 @@
+{
+  "name": "ontox-cli",
+  "version": "0.1.0",
+  "description": "OntoX CLI for the ontology platform",
+  "type": "module",
+  "bin": {
+    "ontox": "src/main.js"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "ontox": "file:../ontox-js"
+  },
+  "license": "MIT"
+}
+

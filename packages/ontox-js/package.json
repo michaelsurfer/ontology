@@ -1,0 +1,20 @@
+{
+  "name": "ontox",
+  "version": "0.1.0",
+  "description": "OntoX JavaScript SDK for the ontology platform",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "keywords": [
+    "ontology",
+    "rdf",
+    "owl",
+    "shacl",
+    "sparql",
+    "sdk"
+  ],
+  "license": "MIT"
+}
+

@@ -1,0 +1,13 @@
+{
+  "name": "ontox-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev -- --host 127.0.0.1 --port 5173",
+    "dev": "npm run dev:backend && npm run dev:frontend"
+  }
+}
+
