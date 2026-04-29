@@ -458,26 +458,20 @@ function createDefaultTestEventJson() {
   return JSON.stringify(
     {
       source: 'demo',
-      events: [
+      entity_name: 'tickets',
+      ai_mode: false,
+      data: {
+        subject: 'Need help with my order',
+        status: 'open',
+        priority: 'high',
+        requester_email: 'jane.doe@acme.example',
+        order_external_id: 'shopify:order:1001',
+      },
+      links: [
         {
-          entityType: 'ticket',
-          operation: 'upsert',
-          externalId: 'zendesk:ticket:123',
-          occurredAt: new Date().toISOString(),
-          attributes: {
-            subject: 'Need help with my order',
-            status: 'open',
-            priority: 'high',
-            requester_email: 'jane.doe@acme.example',
-            order_external_id: 'shopify:order:1001',
-          },
-          links: [
-            {
-              predicate: 'relatedToOrder',
-              targetEntityType: 'order',
-              targetExternalId: 'shopify:order:1001',
-            },
-          ],
+          predicate: 'relatedToOrder',
+          targetEntityType: 'orders',
+          targetExternalId: 'shopify:order:1001',
         },
       ],
     },

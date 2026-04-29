@@ -50,6 +50,13 @@ export function CustomEntitiesPage() {
   }, [])
 
   const canCreate = useMemo(() => {
+    const entityNameErrorText = getEntityNameErrorText({
+      entityName: formData.entity_name,
+      existingEntities: entities,
+    })
+    if (entityNameErrorText) {
+      return false
+    }
     if (!formData.entity_name.trim()) {
       return false
     }
@@ -63,7 +70,11 @@ export function CustomEntitiesPage() {
       return false
     }
     return true
-  }, [formData])
+  }, [formData, entities])
+
+  const entityNameErrorText = useMemo(() => {
+    return getEntityNameErrorText({ entityName: formData.entity_name, existingEntities: entities })
+  }, [formData.entity_name, entities])
 
   return (
     <Stack spacing={2}>
@@ -192,7 +203,10 @@ export function CustomEntitiesPage() {
             label="Entity name (table name)"
             value={formData.entity_name}
             onChange={(event) => setFormData((prev) => ({ ...prev, entity_name: event.target.value }))}
-            helperText='Must match: /^[a-z][a-z0-9_]*$/ (example: "projects")'
+            error={Boolean(entityNameErrorText)}
+            helperText={
+              entityNameErrorText || 'Must match: /^[a-z][a-z0-9_]*$/ (example: "projects")'
+            }
             required
           />
           <TextField
@@ -221,6 +235,11 @@ export function CustomEntitiesPage() {
               Add field
             </Button>
           </Box>
+
+          <Typography variant="body2" color="text.secondary">
+            System fields are created automatically: <b>id</b> (INTEGER, auto-increment). You do not need to add it and you
+            cannot edit or delete it.
+          </Typography>
 
           <Stack
             spacing={1}
@@ -420,6 +439,19 @@ export function CustomEntitiesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
+                <TableRow hover>
+                  <TableCell>
+                    <b>id</b>
+                  </TableCell>
+                  <TableCell>INTEGER (auto-increment)</TableCell>
+                  <TableCell>Yes</TableCell>
+                  <TableCell>
+                    <TextField select size="small" value="yes" disabled sx={{ width: 120 }}>
+                      <MenuItem value="yes">Yes</MenuItem>
+                      <MenuItem value="no">No</MenuItem>
+                    </TextField>
+                  </TableCell>
+                </TableRow>
                 {(activeEntity?.fields || []).map((field) => (
                   <TableRow key={field.id} hover>
                     <TableCell>{field.field_name}</TableCell>
@@ -479,6 +511,26 @@ function createEmptyField() {
     field_type: 'TEXT',
     is_required: false,
   }
+}
+
+/* Validate the entity name for format and uniqueness against existing entities. */
+function getEntityNameErrorText({ entityName, existingEntities }) {
+  const normalized = String(entityName || '').trim().toLowerCase()
+  if (!normalized) {
+    return ''
+  }
+
+  if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
+    return 'Invalid format. Use: /^[a-z][a-z0-9_]*$/'
+  }
+
+  const list = Array.isArray(existingEntities) ? existingEntities : []
+  const exists = list.some((entity) => String(entity?.entity_name || '').trim().toLowerCase() === normalized)
+  if (exists) {
+    return `Entity name already exists: ${normalized}`
+  }
+
+  return ''
 }
 
 /* Fetch all custom entities from backend. */

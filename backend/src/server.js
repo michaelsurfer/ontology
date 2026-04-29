@@ -33,6 +33,8 @@ import {
 } from './mappingsStore.js'
 import { getSchemaGraph } from './schemaGraph.js'
 import { executeSparqlQuery } from './sparqlQuery.js'
+import { createOpenAiClient } from './openaiClient.js'
+import { answerQuestionWithSparql } from './aiChat.js'
 import {
   addCustomEntityField,
   createCustomEntity,
@@ -73,6 +75,8 @@ import {
 function startServer() {
   initializeDatabase()
 
+  const openAiClient = createOpenAiClient()
+
   const app = express()
   app.use(cors())
   app.use(express.json({ limit: '2mb' }))
@@ -89,8 +93,26 @@ function startServer() {
   })
 
   app.post('/api/ingest/events', async (request, response) => {
-    const created = await createIngestEvents({ payload: request.body })
-    response.status(202).json(created)
+    const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+    const entityName = String(safeBody.entity_name || safeBody.entityName || '').trim()
+    if (!entityName) {
+      response.status(400).json({ error: 'entity_name is required' })
+      return
+    }
+
+    const aiModeValue = safeBody.ai_mode !== undefined ? safeBody.ai_mode : safeBody.aiMode
+    const aiMode = normalizeBoolean(aiModeValue)
+    if (aiMode === null) {
+      response.status(400).json({ error: 'ai_mode is required (boolean)' })
+      return
+    }
+
+    try {
+      const created = await createIngestEvents({ payload: request.body })
+      response.status(202).json(created)
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Ingest failed' })
+    }
   })
 
   // Ontology suggestions (draft -> approved -> published)
@@ -322,6 +344,103 @@ function startServer() {
     })
   })
 
+  // AI chat endpoint (natural language -> SPARQL -> results -> answer)
+  app.post('/api/ai/chat', async (request, response) => {
+    const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+    const messageText = String(safeBody.message || safeBody.text || '').trim()
+    if (!messageText) {
+      response.status(400).json({ error: 'message is required' })
+      return
+    }
+
+    if (!openAiClient) {
+      response.status(400).json({ error: 'OpenAI is not configured (missing OPENAI_API_KEY)' })
+      return
+    }
+
+    try {
+      const ontologySettings = getOntologySettings()
+      const baseIri = ontologySettings?.base_iri || 'http://example.com/ontology#'
+
+      const enabledRules = getOntologyRules().filter((rule) => rule && rule.is_enabled)
+      const rulesContext = {
+        enabledRulesCount: enabledRules.length,
+        enabledRules: enabledRules.map((rule) => ({
+          id: rule.id,
+          rule_name: rule.rule_name,
+          target_entity: rule.target_entity,
+          rule_kind: rule.rule_kind,
+          property_iri: rule.property_iri,
+        })),
+      }
+
+      const rulesCheckingEnabledRaw =
+        safeBody.rules_checking_enabled !== undefined
+          ? safeBody.rules_checking_enabled
+          : safeBody.rulesCheckingEnabled
+      const rulesCheckingEnabled =
+        rulesCheckingEnabledRaw === undefined ? null : normalizeBoolean(rulesCheckingEnabledRaw)
+
+      const shouldValidateRules =
+        rulesCheckingEnabled === true ? true : rulesCheckingEnabled === false ? false : shouldRunRulesValidation(messageText)
+      const rulesValidation = shouldValidateRules
+        ? await validateCurrentGraphAgainstRules({ includeOntology: true, includeData: true, maxRowsPerEntity: 200 })
+        : null
+      const rulesValidationPayload = rulesValidation
+        ? {
+            conforms: Boolean(rulesValidation.conforms),
+            executionTimeMs: Number.isFinite(rulesValidation.executionTimeMs) ? Number(rulesValidation.executionTimeMs) : null,
+            resultsCount: Array.isArray(rulesValidation.results) ? rulesValidation.results.length : 0,
+            results: Array.isArray(rulesValidation.results) ? rulesValidation.results.slice(0, 20) : [],
+          }
+        : null
+
+      const schemaContext = {
+        ontologySettings,
+        entityMappings: getEntityMappings(),
+        propertyMappings: getPropertyMappings(),
+        relationships: getRelationshipDefinitions(),
+        rules: rulesContext,
+      }
+
+      const exportOptions = {
+        includeOntology: true,
+        includeData: true,
+        maxRowsPerEntity: 200,
+      }
+
+      const result = await answerQuestionWithSparql({
+        openAiClient,
+        questionText: messageText,
+        baseIri,
+        schemaContext,
+        exportOptions,
+        rulesContext,
+        rulesValidation: rulesValidationPayload
+          ? {
+              conforms: rulesValidationPayload.conforms,
+              executionTimeMs: rulesValidationPayload.executionTimeMs,
+              results: rulesValidationPayload.results,
+            }
+          : null,
+      })
+
+      response.json({
+        answerText: result.answerText,
+        sparqlText: result.sparqlText,
+        sparqlNotes: result.sparqlNotes,
+        variables: result.variables,
+        rows: result.rows,
+        executionTimeMs: result.executionTimeMs,
+        model: result.model,
+        enabledRulesCount: rulesContext.enabledRulesCount,
+        rulesValidation: rulesValidationPayload,
+      })
+    } catch (error) {
+      response.status(500).json({ error: error?.message ? String(error.message) : 'AI request failed' })
+    }
+  })
+
   // Ontology rules (SHACL)
   app.get('/api/rules', (request, response) => {
     response.json(getOntologyRules())
@@ -379,6 +498,31 @@ function startServer() {
   app.listen(port, () => {
     console.log(`API listening on http://localhost:${port}`)
   })
+}
+
+/* Normalize a boolean-like input; returns null when missing/invalid. */
+function normalizeBoolean(value) {
+  if (value === true) return true
+  if (value === false) return false
+  if (value === 1 || value === '1') return true
+  if (value === 0 || value === '0') return false
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (text === 'true') return true
+  if (text === 'false') return false
+  return null
+}
+
+/* Decide whether to run SHACL validation for an AI question. */
+function shouldRunRulesValidation(messageText) {
+  const text = String(messageText || '').toLowerCase()
+  return (
+    text.includes('rule') ||
+    text.includes('shacl') ||
+    text.includes('validate') ||
+    text.includes('validation') ||
+    text.includes('conform') ||
+    text.includes('violation')
+  )
 }
 
 /* Create simple CRUD routes for a single table/entity. */

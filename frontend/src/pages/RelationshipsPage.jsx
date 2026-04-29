@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -23,10 +23,12 @@ import {
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 import { apiClient } from '../api/apiClient'
 
 /* Render UI to define and manage cross-table relationships (object properties). */
 export function RelationshipsPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [relationships, setRelationships] = useState([])
   const [entities, setEntities] = useState([])
@@ -162,6 +164,14 @@ export function RelationshipsPage() {
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            navigate(`/graph?focusRelationshipId=${encodeURIComponent(String(relationship.id))}`)
+                          }}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
                         <IconButton
                           size="small"
                           onClick={() =>

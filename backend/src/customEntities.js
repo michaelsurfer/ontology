@@ -19,6 +19,10 @@ export function createCustomEntity({ entity_name, display_name, fields, base_iri
     throw new Error(`Entity name is reserved or already used: ${normalizedEntityName}`)
   }
 
+  if (getCustomEntityByName(normalizedEntityName)) {
+    throw new Error(`Entity already exists: ${normalizedEntityName}`)
+  }
+
   const normalizedDisplayName = String(display_name || normalizedEntityName).trim() || normalizedEntityName
   const normalizedFields = normalizeFields(fields)
 

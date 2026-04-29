@@ -17,6 +17,7 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { DocsPage } from './pages/DocsPage'
 import { AutomationPage } from './pages/AutomationPage'
 import { DataPage } from './pages/DataPage'
+import { AiPage } from './pages/AiPage'
 
 const appTheme = createTheme({
   palette: {
@@ -36,6 +37,7 @@ function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/ai" element={<AiPage />} />
             <Route path="/data" element={<DataPage />} />
             <Route path="/relationships" element={<RelationshipsPage />} />
             <Route path="/graph" element={<GraphPage />} />

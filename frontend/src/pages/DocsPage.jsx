@@ -122,6 +122,58 @@ export function DocsPage() {
           <Divider sx={{ my: 2 }} />
 
           <Stack spacing={1}>
+            <Typography variant="subtitle2">Example: inject data (POST)</Typography>
+            <Typography variant="body2" color="text.secondary">
+              This is the single “front door” for real-time data. The backend stores the raw payload and generates draft
+              ontology suggestions for review.
+            </Typography>
+
+            <Typography variant="subtitle2" sx={{ mt: 1 }}>
+              curl
+            </Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+              {`curl -X POST http://localhost:5174/api/ingest/events \\
+  -H "Content-Type: application/json" \\
+  -d '{
+  "entity_name": "contacts",
+  "ai_mode": false,
+  "data": {
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": "jane.doe@example.com",
+    "account_id": "account_456"
+  },
+  "occurredAt": "2026-04-28T20:00:00Z",
+  "links": [
+    {
+      "predicate": "belongs_to",
+      "targetEntityType": "accounts",
+      "targetExternalId": "account_456",
+      "subjectColumn": "account_id",
+      "objectColumn": "external_id"
+    }
+}'`}
+            </Typography>
+
+            <Typography variant="subtitle2" sx={{ mt: 1 }}>
+              Response (202)
+            </Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+              {`{
+  "accepted": 1,
+  "insertedEvents": 1,
+  "insertedSuggestions": 3,
+  "insertedRows": 1
+}`}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Note: `entity_name` and `ai_mode` are mandatory. Counts depend on what is already in your database.
+            </Typography>
+          </Stack>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack spacing={1}>
             <Typography variant="subtitle2">Suggestions (review before apply)</Typography>
             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
               GET /api/suggestions?status=draft

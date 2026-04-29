@@ -43,6 +43,9 @@ export function AppShell() {
   const primaryNavigationItems = getPrimaryNavigationItems()
   const advancedItems = getAdvancedMenuItems()
 
+  const aiMenuItem = primaryNavigationItems.find((item) => item.to === '/ai') || null
+  const primaryItemsAfterAi = primaryNavigationItems.filter((item) => item.to !== '/ai')
+
   const isAdvancedSectionActive = advancedItems.some(
     (item) => location.pathname === item.to || location.pathname.startsWith(item.to),
   )
@@ -67,7 +70,19 @@ export function AppShell() {
 
         <Box sx={{ flexGrow: 1, py: 1 }}>
           <List dense sx={{ px: 1 }}>
-            {primaryNavigationItems.map((item) => (
+            {aiMenuItem ? (
+              <NavigationListItem
+                key={aiMenuItem.to}
+                to={aiMenuItem.to}
+                label={aiMenuItem.label}
+                currentPath={location.pathname}
+                onNavigate={isDesktopViewport ? null : closeMobileDrawer}
+              />
+            ) : null}
+
+            {aiMenuItem ? <Divider sx={{ my: 1 }} /> : null}
+
+            {primaryItemsAfterAi.map((item) => (
               <NavigationListItem
                 key={item.to}
                 to={item.to}
@@ -166,7 +181,13 @@ export function AppShell() {
         </AppBar>
 
         <Box sx={{ flexGrow: 1, py: 3 }}>
-          <Container maxWidth="lg">
+          <Container
+            maxWidth={false}
+            sx={{
+              maxWidth: 1700,
+              px: { xs: 2, sm: 3, md: 4 },
+            }}
+          >
             <Outlet />
           </Container>
         </Box>
@@ -178,6 +199,7 @@ export function AppShell() {
 /* Provide the primary navigation list shown above the separators. */
 function getPrimaryNavigationItems() {
   return [
+    { to: '/ai', label: 'AI' },
     { to: '/custom-entities', label: 'Entities' },
     { to: '/relationships', label: 'Relationships' },
     { to: '/graph', label: 'Graph' },
@@ -190,6 +212,7 @@ function getAdvancedMenuItems() {
     { to: '/sparql', label: 'SPARQL' },
     { to: '/rdf', label: 'RDF Export' },
     { to: '/automation', label: 'Automation' },
+    { to: '/rules', label: 'Rules' },
     { to: '/mappings', label: 'Mappings' },
   ]
 }

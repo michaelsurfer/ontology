@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -16,7 +16,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import ReactFlow, {
   Background,
   Controls,
@@ -34,10 +34,14 @@ const nodeTypes = {
 
 /* Visualize the schema relationships graph (classes + object properties). */
 export function GraphPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const focusRelationshipId = searchParams.get('focusRelationshipId')
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [reactFlowInstance, setReactFlowInstance] = useState(null)
+  const lastAppliedFocusRelationshipIdRef = useRef(null)
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingRelationshipId, setEditingRelationshipId] = useState(null)
@@ -62,9 +66,66 @@ export function GraphPage() {
     void loadEntities({ setEntities })
   }, [])
 
+  useEffect(() => {
+    if (!focusRelationshipId) {
+      lastAppliedFocusRelationshipIdRef.current = null
+      return
+    }
+
+    if (lastAppliedFocusRelationshipIdRef.current === String(focusRelationshipId)) {
+      return
+    }
+
+    if (!Array.isArray(nodes) || nodes.length === 0 || !Array.isArray(edges) || edges.length === 0) {
+      return
+    }
+
+    const nextNodes = rearrangeNodesForFocusedRelationship({
+      nodes,
+      edges,
+      focusRelationshipId,
+    })
+
+    if (!nextNodes) {
+      return
+    }
+
+    lastAppliedFocusRelationshipIdRef.current = String(focusRelationshipId)
+    setNodes(nextNodes)
+
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('focusRelationshipId')
+    setSearchParams(nextSearchParams, { replace: true })
+
+    setTimeout(() => {
+      if (reactFlowInstance && typeof reactFlowInstance.fitView === 'function') {
+        reactFlowInstance.fitView({ padding: 0.2, duration: 450 })
+      }
+    }, 50)
+  }, [focusRelationshipId, nodes, edges, reactFlowInstance, searchParams, setSearchParams])
+
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">Relationship Graph</Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Typography variant="h5" sx={{ flexGrow: 1 }}>
+          Relationship Graph
+        </Typography>
+        <Button
+          variant="text"
+          color="inherit"
+          onClick={() => {
+            setNodes((previousNodes) => tidyLayoutNodes({ nodes: previousNodes, edges }))
+            setTimeout(() => {
+              if (reactFlowInstance && typeof reactFlowInstance.fitView === 'function') {
+                reactFlowInstance.fitView({ padding: 0.2, duration: 450 })
+              }
+            }, 50)
+          }}
+          disabled={!Array.isArray(nodes) || nodes.length === 0}
+        >
+          Tidy layout
+        </Button>
+      </Box>
       <Typography variant="body2" color="text.secondary">
         This graph is schema-level: each node is a CRM table mapped to an OWL Class, and each edge
         is a user-defined relationship mapped to an OWL ObjectProperty.
@@ -85,6 +146,7 @@ export function GraphPage() {
               edges={edges}
               nodeTypes={nodeTypes}
               fitView
+              onInit={(instance) => setReactFlowInstance(instance)}
               onNodesChange={(changes) => setNodes((previousNodes) => applyNodeChanges(changes, previousNodes))}
               onEdgesChange={(changes) => setEdges((previousEdges) => applyEdgeChanges(changes, previousEdges))}
               onConnect={(connection) =>
@@ -160,6 +222,198 @@ export function GraphPage() {
   )
 }
 
+/* Reposition nodes so a chosen relationship is centered. */
+function rearrangeNodesForFocusedRelationship({ nodes, edges, focusRelationshipId }) {
+  const relationshipIdText = String(focusRelationshipId || '').trim()
+  if (!relationshipIdText) {
+    return null
+  }
+
+  const focusEdge =
+    edges.find((edge) => String(edge?.data?.relationship_id) === relationshipIdText) ||
+    edges.find((edge) => String(edge?.id || '') === `rel-${relationshipIdText}`)
+
+  if (!focusEdge) {
+    return null
+  }
+
+  const sourceNodeId = String(focusEdge.source || '').trim()
+  const targetNodeId = String(focusEdge.target || '').trim()
+  if (!sourceNodeId || !targetNodeId) {
+    return null
+  }
+
+  const centerX = 0
+  const centerY = 0
+  const focusHorizontalGap = 240
+  const ringRadius = Math.max(420, 90 * nodes.length)
+
+  const focusedIds = new Set([sourceNodeId, targetNodeId])
+  const otherNodes = nodes.filter((node) => !focusedIds.has(node.id))
+
+  const repositionedNodes = nodes.map((node) => {
+    if (node.id === sourceNodeId) {
+      return { ...node, position: { x: centerX - focusHorizontalGap, y: centerY } }
+    }
+    if (node.id === targetNodeId) {
+      return { ...node, position: { x: centerX + focusHorizontalGap, y: centerY } }
+    }
+    return node
+  })
+
+  const total = otherNodes.length
+  if (total === 0) {
+    return repositionedNodes
+  }
+
+  const otherPositionsById = new Map()
+  const angleStep = (Math.PI * 2) / total
+  for (let index = 0; index < total; index += 1) {
+    const node = otherNodes[index]
+    const angle = -Math.PI / 2 + angleStep * index
+    const x = centerX + Math.cos(angle) * ringRadius
+    const y = centerY + Math.sin(angle) * ringRadius
+    otherPositionsById.set(node.id, { x, y })
+  }
+
+  return repositionedNodes.map((node) => {
+    const position = otherPositionsById.get(node.id)
+    if (!position) {
+      return node
+    }
+    return { ...node, position }
+  })
+}
+
+/* Compute a simple non-overlapping layout for the current graph. */
+function tidyLayoutNodes({ nodes, edges }) {
+  const safeNodes = Array.isArray(nodes) ? nodes : []
+  const safeEdges = Array.isArray(edges) ? edges : []
+
+  const nodeById = new Map(safeNodes.map((node) => [node.id, node]))
+  const degreesById = new Map(safeNodes.map((node) => [node.id, 0]))
+
+  for (const edge of safeEdges) {
+    const source = edge?.source
+    const target = edge?.target
+    if (!nodeById.has(source) || !nodeById.has(target)) {
+      continue
+    }
+    degreesById.set(source, (degreesById.get(source) || 0) + 1)
+    degreesById.set(target, (degreesById.get(target) || 0) + 1)
+  }
+
+  const adjacencyById = new Map(safeNodes.map((node) => [node.id, new Set()]))
+  for (const edge of safeEdges) {
+    const source = edge?.source
+    const target = edge?.target
+    if (!adjacencyById.has(source) || !adjacencyById.has(target)) {
+      continue
+    }
+    adjacencyById.get(source).add(target)
+    adjacencyById.get(target).add(source)
+  }
+
+  const visited = new Set()
+  const components = []
+
+  for (const node of safeNodes) {
+    if (visited.has(node.id)) {
+      continue
+    }
+    const queue = [node.id]
+    visited.add(node.id)
+    const componentIds = []
+
+    while (queue.length > 0) {
+      const id = queue.shift()
+      componentIds.push(id)
+      const neighbors = adjacencyById.get(id) || new Set()
+      for (const neighborId of neighbors) {
+        if (!visited.has(neighborId)) {
+          visited.add(neighborId)
+          queue.push(neighborId)
+        }
+      }
+    }
+
+    components.push(componentIds)
+  }
+
+  const horizontalGap = 320
+  const verticalGap = 130
+  const componentGapX = 520
+
+  const positionsById = new Map()
+  let componentOffsetX = 0
+
+  for (const componentIds of components) {
+    const rootId = componentIds
+      .slice()
+      .sort((a, b) => (degreesById.get(b) || 0) - (degreesById.get(a) || 0))[0]
+
+    const levelById = new Map()
+    const queue = [rootId]
+    levelById.set(rootId, 0)
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()
+      const currentLevel = levelById.get(currentId) || 0
+      const neighbors = Array.from(adjacencyById.get(currentId) || [])
+      for (const neighborId of neighbors) {
+        if (!componentIds.includes(neighborId)) {
+          continue
+        }
+        if (!levelById.has(neighborId)) {
+          levelById.set(neighborId, currentLevel + 1)
+          queue.push(neighborId)
+        }
+      }
+    }
+
+    const nodesByLevel = new Map()
+    for (const id of componentIds) {
+      const level = levelById.has(id) ? levelById.get(id) : 0
+      const list = nodesByLevel.get(level) || []
+      list.push(id)
+      nodesByLevel.set(level, list)
+    }
+
+    const levels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b)
+    let maxWidthLevels = 0
+
+    for (const level of levels) {
+      const idsInLevel = nodesByLevel.get(level) || []
+      const sortedIdsInLevel = idsInLevel
+        .slice()
+        .sort((a, b) => String(a).localeCompare(String(b)))
+
+      maxWidthLevels = Math.max(maxWidthLevels, sortedIdsInLevel.length)
+
+      const startY = -((sortedIdsInLevel.length - 1) * verticalGap) / 2
+      for (let index = 0; index < sortedIdsInLevel.length; index += 1) {
+        const id = sortedIdsInLevel[index]
+        positionsById.set(id, {
+          x: componentOffsetX + level * horizontalGap,
+          y: startY + index * verticalGap,
+        })
+      }
+    }
+
+    const componentWidth = Math.max(1, levels.length) * horizontalGap
+    const componentExtra = maxWidthLevels > 2 ? (maxWidthLevels - 2) * 80 : 0
+    componentOffsetX += componentWidth + componentExtra + componentGapX
+  }
+
+  return safeNodes.map((node) => {
+    const position = positionsById.get(node.id)
+    if (!position) {
+      return node
+    }
+    return { ...node, position }
+  })
+}
+
 /* Load the schema graph nodes and edges from the backend. */
 async function loadGraph({ setNodes, setEdges, setErrorMessage, setIsLoading }) {
   setIsLoading(true)
@@ -168,13 +422,15 @@ async function loadGraph({ setNodes, setEdges, setErrorMessage, setIsLoading }) 
     const response = await apiClient.get('/graph/schema')
     const data = response.data || {}
     const loadedNodes = Array.isArray(data.nodes) ? data.nodes : []
-    setNodes(
-      loadedNodes.map((node) => ({
-        ...node,
-        type: 'crmEntityNode',
-      })),
-    )
-    setEdges(Array.isArray(data.edges) ? data.edges : [])
+    const loadedEdges = Array.isArray(data.edges) ? data.edges : []
+
+    const nodesWithType = loadedNodes.map((node) => ({
+      ...node,
+      type: 'crmEntityNode',
+    }))
+
+    setEdges(loadedEdges)
+    setNodes(tidyLayoutNodes({ nodes: nodesWithType, edges: loadedEdges }))
   } catch (error) {
     setErrorMessage(getErrorMessage(error))
   } finally {
@@ -221,23 +477,28 @@ function CrmEntityNode({ data }) {
           border: '2px solid white',
         }}
       />
-      <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, flexGrow: 1 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'stretch' }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ fontWeight: 700, textAlign: 'center', lineHeight: 1.2 }}
+        >
           {data?.label || 'Entity'}
         </Typography>
-        <Button
-          size="small"
-          variant="text"
-          onClick={(event) => {
-            event.stopPropagation()
-            const entityName = data?.entity_name || data?.label
-            if (entityName) {
-              navigate(`/custom/${entityName}`)
-            }
-          }}
-        >
-          Open
-        </Button>
+        <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'center' }}>
+          <Button
+            size="small"
+            variant="text"
+            onClick={(event) => {
+              event.stopPropagation()
+              const entityName = data?.entity_name || data?.label
+              if (entityName) {
+                navigate(`/custom/${entityName}`)
+              }
+            }}
+          >
+            Open
+          </Button>
+        </Box>
       </Box>
     </Box>
   )

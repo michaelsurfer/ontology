@@ -7,6 +7,7 @@ import { createShaclTurtleExport } from './shaclExport.js'
 
 /* Validate the current CRM→RDF graph against stored SHACL rules. */
 export async function validateCurrentGraphAgainstRules({ includeOntology, includeData, maxRowsPerEntity }) {
+  const startedAtMs = Date.now()
   const shapesTurtle = await createShaclTurtleExport()
   const dataTurtle = await createRdfTurtleExport({
     includeOntology: Boolean(includeOntology),
@@ -32,6 +33,7 @@ export async function validateCurrentGraphAgainstRules({ includeOntology, includ
         : null,
       sourceShape: normalizeRdfTerm(result.sourceShape),
     })),
+    executionTimeMs: Math.max(0, Date.now() - startedAtMs),
   }
 }
 

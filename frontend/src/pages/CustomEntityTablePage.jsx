@@ -248,6 +248,12 @@ export function CustomEntityTablePage() {
       <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editingRow ? 'Edit row' : 'Add row'}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+          <TextField
+            label="id"
+            value={editingRow?.id ?? ''}
+            disabled
+            helperText={editingRow ? 'System field (auto-increment integer)' : 'System field (auto-increment integer)'}
+          />
           {fields.map((field) => (
             <TextField
               key={field.field_name}

@@ -1,6 +1,8 @@
 import { getDatabase } from './database.js'
 import { getOntologySettings } from './mappingsStore.js'
 import { createOpenAiClient } from './openaiClient.js'
+import { getCustomEntityByName } from './customEntities.js'
+import { createCustomEntityRow } from './customEntityCrud.js'
 import { generateDraftSuggestionsFromEvents } from './ontologyAutoSuggest.js'
 
 /* List recent ingest events for debugging and audit. */
@@ -30,14 +32,18 @@ export async function createIngestEvents({ payload }) {
   const safePayload = payload && typeof payload === 'object' ? payload : {}
 
   const source = String(safePayload.source || 'custom').trim() || 'custom'
-  const rawEvents = Array.isArray(safePayload.events) ? safePayload.events : [safePayload]
+  const entityName = String(safePayload.entity_name || safePayload.entityName || '').trim()
+  const aiModeValue = safePayload.ai_mode !== undefined ? safePayload.ai_mode : safePayload.aiMode
+  const aiMode = normalizeBoolean(aiModeValue)
+
+  const rawEvents = normalizePayloadToEvents({ safePayload, entityName, source })
 
   const normalizedEvents = rawEvents
     .map((event) => normalizeIncomingEvent({ source, event }))
     .filter(Boolean)
 
   if (normalizedEvents.length === 0) {
-    return { accepted: 0, insertedEvents: 0, insertedSuggestions: 0 }
+    return { accepted: 0, insertedEvents: 0, insertedSuggestions: 0, insertedRows: 0 }
   }
 
   const ontologySettings = getOntologySettings()
@@ -53,6 +59,13 @@ export async function createIngestEvents({ payload }) {
       .all()
       .map((row) => [row.entity_type, row.target_entity_name]),
   )
+
+  // If the caller explicitly provides entity_name, treat it as the target mapping for this payload.
+  if (entityName) {
+    const normalizedEntityTypeKey = normalizeEntityType(entityName)
+    existingIngestMappings.set(normalizedEntityTypeKey, entityName)
+    existingEntityNames.add(entityName)
+  }
 
   const customEntityFieldNamesByEntityName = new Map()
   const customEntityFieldRows = database
@@ -81,6 +94,13 @@ export async function createIngestEvents({ payload }) {
     existingIngestMappings,
     customEntityFieldNamesByEntityName,
     openAiClient,
+  })
+
+  const insertedRows = await upsertRowsFromIngestEvents({
+    entityName,
+    aiMode,
+    openAiClient,
+    normalizedEvents,
   })
 
   const transaction = database.transaction(() => {
@@ -141,6 +161,7 @@ export async function createIngestEvents({ payload }) {
     accepted: normalizedEvents.length,
     insertedEvents: result.insertedEvents,
     insertedSuggestions: result.insertedSuggestions,
+    insertedRows,
   }
 }
 
@@ -151,7 +172,9 @@ function normalizeIncomingEvent({ source, event }) {
     return null
   }
 
-  const entityType = String(safeEvent.entityType || safeEvent.entity_type || '').trim()
+  const entityType = String(
+    safeEvent.entityType || safeEvent.entity_type || safeEvent.entity_name || safeEvent.entityName || '',
+  ).trim()
   const operation = String(safeEvent.operation || 'upsert').trim() || 'upsert'
 
   if (!entityType) {
@@ -179,6 +202,53 @@ function normalizeIncomingEvent({ source, event }) {
   }
 }
 
+/* Normalize a new-style ingestion payload into an array of event-like objects. */
+function normalizePayloadToEvents({ safePayload, entityName, source }) {
+  const safeEntityName = String(entityName || '').trim()
+
+  if (Array.isArray(safePayload.events)) {
+    // Backwards compatible "events" format, but enforce entityName if provided.
+    return safePayload.events.map((event) => {
+      if (!safeEntityName) {
+        return event
+      }
+      const safeEvent = event && typeof event === 'object' ? event : {}
+      return {
+        ...safeEvent,
+        entityType: safeEvent.entityType || safeEvent.entity_type || safeEntityName,
+        entity_name: safeEntityName,
+        ai_mode: safePayload.ai_mode !== undefined ? safePayload.ai_mode : safePayload.aiMode,
+        source,
+      }
+    })
+  }
+
+  const rows = Array.isArray(safePayload.rows)
+    ? safePayload.rows
+    : safePayload.data && typeof safePayload.data === 'object'
+      ? [safePayload.data]
+      : safePayload.attributes && typeof safePayload.attributes === 'object'
+        ? [safePayload.attributes]
+        : []
+
+  if (rows.length > 0) {
+    return rows.map((row) => ({
+      entityType: safeEntityName,
+      operation: String(safePayload.operation || 'upsert'),
+      externalId: safePayload.external_id || safePayload.externalId || null,
+      occurredAt: safePayload.occurred_at || safePayload.occurredAt || new Date().toISOString(),
+      attributes: row,
+      links: Array.isArray(safePayload.links) ? safePayload.links : [],
+      entity_name: safeEntityName,
+      ai_mode: safePayload.ai_mode !== undefined ? safePayload.ai_mode : safePayload.aiMode,
+      source,
+    }))
+  }
+
+  // Fallback: treat payload itself as an event.
+  return [safePayload]
+}
+
 /* Normalize an entity type string into a stable key. */
 function normalizeEntityType(value) {
   return String(value || '')
@@ -186,6 +256,168 @@ function normalizeEntityType(value) {
     .toLowerCase()
     .replace(/[^a-z0-9_]+/g, '_')
     .replace(/^_+|_+$/g, '')
+}
+
+/* Normalize a boolean-like input; returns null when missing/invalid. */
+function normalizeBoolean(value) {
+  if (value === true) return true
+  if (value === false) return false
+  if (value === 1 || value === '1') return true
+  if (value === 0 || value === '0') return false
+  const text = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (text === 'true') return true
+  if (text === 'false') return false
+  return null
+}
+
+/* Upsert rows into the requested custom entity table based on ingest events. */
+async function upsertRowsFromIngestEvents({ entityName, aiMode, openAiClient, normalizedEvents }) {
+  const safeEntityName = String(entityName || '').trim()
+  if (!safeEntityName) {
+    return 0
+  }
+
+  const entity = getCustomEntityByName(safeEntityName)
+  if (!entity) {
+    throw new Error(`Custom entity not found: ${safeEntityName}`)
+  }
+
+  const activeFieldNames = (entity.fields || [])
+    .filter((field) => field && field.is_active)
+    .map((field) => field.field_name)
+    .filter(Boolean)
+
+  const activeFieldNameSet = new Set(activeFieldNames)
+
+  let insertedRows = 0
+  for (const event of normalizedEvents) {
+    const attributes = event?.attributes && typeof event.attributes === 'object' ? event.attributes : {}
+
+    const fittedAttributes =
+      aiMode === true
+        ? await fitAttributesToEntityUsingAi({
+            openAiClient,
+            entityName: safeEntityName,
+            targetFieldNames: activeFieldNames,
+            attributes,
+          })
+        : attributes
+
+    const rowData = mapAttributesToExistingColumns({
+      attributes: fittedAttributes,
+      activeFieldNameSet,
+    })
+
+    // If nothing matches, still insert an empty row to record presence.
+    createCustomEntityRow(safeEntityName, rowData)
+    insertedRows += 1
+  }
+
+  return insertedRows
+}
+
+/* Map an attributes object to existing active columns only. */
+function mapAttributesToExistingColumns({ attributes, activeFieldNameSet }) {
+  const safeAttributes = attributes && typeof attributes === 'object' ? attributes : {}
+  const mapped = {}
+
+  for (const [key, value] of Object.entries(safeAttributes)) {
+    const columnName = String(key || '').trim()
+    if (!columnName) {
+      continue
+    }
+    if (columnName === 'id' || columnName === 'created_at') {
+      continue
+    }
+    if (!activeFieldNameSet.has(columnName)) {
+      continue
+    }
+    mapped[columnName] = value
+  }
+
+  return mapped
+}
+
+/* Use AI to fit and correct incoming data to a specific entity table schema. */
+async function fitAttributesToEntityUsingAi({ openAiClient, entityName, targetFieldNames, attributes }) {
+  if (!openAiClient) {
+    return attributes
+  }
+
+  const safeTargetFieldNames = Array.isArray(targetFieldNames) ? targetFieldNames : []
+  const safeAttributes = attributes && typeof attributes === 'object' ? attributes : {}
+
+  if (safeTargetFieldNames.length === 0) {
+    return safeAttributes
+  }
+
+  const model = String(process.env.OPENAI_MODEL || '').trim() || 'gpt-4o-mini'
+
+  const messages = [
+    {
+      role: 'system',
+      content:
+        'You are a data cleaning assistant. Map incoming JSON attributes to the target table columns. ' +
+        'Return JSON only with keys: mapped (object), notes (string). ' +
+        'Rules: Only use keys that exist in targetFieldNames. If a field name is close (typo/synonym), correct it. ' +
+        'Do not invent new columns.',
+    },
+    {
+      role: 'user',
+      content: JSON.stringify(
+        {
+          entity_name: entityName,
+          targetFieldNames: safeTargetFieldNames,
+          attributes: safeAttributes,
+          output: { mapped: { column: 'value' }, notes: 'string' },
+        },
+        null,
+        2,
+      ),
+    },
+  ]
+
+  const responseJson = await tryChatJson({ openAiClient, model, messages })
+  const mapped = responseJson?.mapped && typeof responseJson.mapped === 'object' ? responseJson.mapped : null
+  if (!mapped) {
+    return safeAttributes
+  }
+
+  return mapped
+}
+
+/* Attempt to get structured JSON back from chat completions. */
+async function tryChatJson({ openAiClient, model, messages }) {
+  let result = null
+  try {
+    result = await openAiClient.chat.completions.create({
+      model,
+      temperature: 0.1,
+      messages,
+      response_format: { type: 'json_object' },
+    })
+  } catch (error) {
+    try {
+      result = await openAiClient.chat.completions.create({
+        model,
+        temperature: 0.1,
+        messages,
+      })
+    } catch (secondError) {
+      return null
+    }
+  }
+
+  const content = result?.choices?.[0]?.message?.content
+  if (!content) {
+    return null
+  }
+
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    return null
+  }
 }
 
 /* Parse JSON safely for debugging views. */

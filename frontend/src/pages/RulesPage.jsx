@@ -30,6 +30,8 @@ import { apiClient } from '../api/apiClient'
 export function RulesPage() {
   const [rules, setRules] = useState([])
   const [entities, setEntities] = useState([])
+  const [propertyMappings, setPropertyMappings] = useState([])
+  const [baseIri, setBaseIri] = useState('http://example.com/ontology#')
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -50,6 +52,8 @@ export function RulesPage() {
   useEffect(() => {
     void loadRules({ setRules, setErrorMessage, setIsLoading })
     void loadEntities({ setEntities })
+    void loadPropertyMappings({ setPropertyMappings })
+    void loadOntologySettings({ setBaseIri })
   }, [])
 
   return (
@@ -62,6 +66,7 @@ export function RulesPage() {
           variant="contained"
           onClick={() =>
             openCreateDialog({
+              entities,
               setEditingRule,
               setFormData,
               setIsDialogOpen,
@@ -146,6 +151,9 @@ export function RulesPage() {
                             onClick={() =>
                               openEditDialog({
                                 rule,
+                                entityColumns,
+                                propertyMappings,
+                                baseIri,
                                 setEditingRule,
                                 setFormData,
                                 setIsDialogOpen,
@@ -194,6 +202,8 @@ export function RulesPage() {
         setFormData={setFormData}
         entityColumns={entityColumns}
         entities={entities}
+        propertyMappings={propertyMappings}
+        baseIri={baseIri}
         onClose={() => setIsDialogOpen(false)}
         onSave={() =>
           void saveRuleAndReload({
@@ -262,9 +272,33 @@ function ValidationReport({ report }) {
 }
 
 /* Render dialog for creating/editing a rule. */
-function RuleDialog({ isOpen, editingRule, formData, setFormData, entityColumns, entities, onClose, onSave }) {
+function RuleDialog({
+  isOpen,
+  editingRule,
+  formData,
+  setFormData,
+  entityColumns,
+  entities,
+  propertyMappings,
+  baseIri,
+  onClose,
+  onSave,
+}) {
   const targetColumns = entityColumns.get(formData.target_entity) || ['id']
   const allowedValuesText = Array.isArray(formData.allowed_values) ? formData.allowed_values.join('\n') : ''
+  const selectableTargetColumns = targetColumns.filter((columnName) => !isSystemColumn(columnName))
+
+  const selectedColumnName = formData.target_column_name || ''
+  const canSave = Boolean(
+    String(formData.rule_name || '').trim() &&
+      String(formData.target_entity || '').trim() &&
+      String(formData.rule_kind || '').trim() &&
+      String(formData.property_iri || '').trim() &&
+      (formData.rule_kind !== 'datatype' || String(formData.datatype_iri || '').trim()) &&
+      (formData.rule_kind !== 'pattern' || String(formData.pattern || '').trim()) &&
+      (formData.rule_kind !== 'in' || (Array.isArray(formData.allowed_values) && formData.allowed_values.length > 0)) &&
+      (formData.rule_kind !== 'minCount' || Number(formData.min_count || 1) >= 1),
+  )
 
   const kindOptions = [
     { id: 'minCount', label: 'Required (min count)' },
@@ -294,7 +328,8 @@ function RuleDialog({ isOpen, editingRule, formData, setFormData, entityColumns,
               setFormData((prev) => ({
                 ...prev,
                 target_entity: nextEntity,
-                property_iri: prev.property_iri,
+                target_column_name: '',
+                property_iri: '',
               }))
             }}
             sx={{ flex: '1 1 260px' }}
@@ -302,6 +337,34 @@ function RuleDialog({ isOpen, editingRule, formData, setFormData, entityColumns,
             {entities.map((entity) => (
               <MenuItem key={entity.entity_name} value={entity.entity_name}>
                 {entity.display_name || entity.entity_name}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            label="Target field (column)"
+            value={selectedColumnName}
+            onChange={(event) => {
+              const nextColumnName = event.target.value
+              const nextPropertyIri = getPropertyIriForEntityColumn({
+                propertyMappings,
+                baseIri,
+                entityName: formData.target_entity,
+                columnName: nextColumnName,
+              })
+              setFormData((prev) => ({
+                ...prev,
+                target_column_name: nextColumnName,
+                property_iri: nextPropertyIri,
+              }))
+            }}
+            sx={{ flex: '1 1 260px' }}
+            disabled={!formData.target_entity}
+          >
+            {selectableTargetColumns.map((columnName) => (
+              <MenuItem key={columnName} value={columnName}>
+                {columnName}
               </MenuItem>
             ))}
           </TextField>
@@ -326,6 +389,7 @@ function RuleDialog({ isOpen, editingRule, formData, setFormData, entityColumns,
           value={formData.property_iri}
           onChange={(event) => setFormData((prev) => ({ ...prev, property_iri: event.target.value }))}
           placeholder="http://example.com/ontology#accountName"
+          helperText="This is the RDF property for the selected field. Usually auto-filled from Property Mappings."
           required
         />
 
@@ -416,7 +480,7 @@ function RuleDialog({ isOpen, editingRule, formData, setFormData, entityColumns,
         <Button onClick={onClose} color="inherit">
           Cancel
         </Button>
-        <Button onClick={onSave} variant="contained">
+        <Button onClick={onSave} variant="contained" disabled={!canSave}>
           Save
         </Button>
       </DialogActions>
@@ -428,9 +492,10 @@ function RuleDialog({ isOpen, editingRule, formData, setFormData, entityColumns,
 function createEmptyRuleForm() {
   return {
     rule_name: '',
-    target_entity: 'accounts',
+    target_entity: '',
     rule_kind: 'minCount',
-    property_iri: 'http://example.com/ontology#accountName',
+    target_column_name: '',
+    property_iri: '',
     datatype_iri: 'http://www.w3.org/2001/XMLSchema#string',
     pattern: '^.+$',
     allowed_values: [],
@@ -466,20 +531,68 @@ async function loadEntities({ setEntities }) {
   }
 }
 
+/* Load property mappings so rules can pick a field and auto-fill property IRIs. */
+async function loadPropertyMappings({ setPropertyMappings }) {
+  try {
+    const response = await apiClient.get('/mappings/properties')
+    setPropertyMappings(Array.isArray(response.data) ? response.data : [])
+  } catch (error) {
+    setPropertyMappings([])
+  }
+}
+
+/* Load ontology settings (base IRI) for fallback property IRI generation. */
+async function loadOntologySettings({ setBaseIri }) {
+  try {
+    const response = await apiClient.get('/ontology/settings')
+    const baseIri = response.data?.base_iri
+    if (typeof baseIri === 'string' && baseIri.trim()) {
+      setBaseIri(baseIri.trim())
+    }
+  } catch (error) {
+    // ignore
+  }
+}
+
 /* Open create dialog. */
-function openCreateDialog({ setEditingRule, setFormData, setIsDialogOpen }) {
+function openCreateDialog({ entities, setEditingRule, setFormData, setIsDialogOpen }) {
+  const list = Array.isArray(entities) ? entities : []
+  const defaultEntityName = list[0]?.entity_name ? String(list[0].entity_name) : ''
+
   setEditingRule(null)
-  setFormData(createEmptyRuleForm())
+  setFormData({
+    ...createEmptyRuleForm(),
+    target_entity: defaultEntityName,
+  })
   setIsDialogOpen(true)
 }
 
 /* Open edit dialog. */
-function openEditDialog({ rule, setEditingRule, setFormData, setIsDialogOpen }) {
+function openEditDialog({
+  rule,
+  entityColumns,
+  propertyMappings,
+  baseIri,
+  setEditingRule,
+  setFormData,
+  setIsDialogOpen,
+}) {
   setEditingRule(rule)
+
+  const targetEntityName = rule.target_entity || 'accounts'
+  const inferredTargetColumnName = inferTargetColumnNameFromRule({
+    entityColumns,
+    propertyMappings,
+    baseIri,
+    targetEntityName,
+    propertyIri: rule.property_iri || '',
+  })
+
   setFormData({
     rule_name: rule.rule_name || '',
-    target_entity: rule.target_entity || 'accounts',
+    target_entity: targetEntityName,
     rule_kind: rule.rule_kind || 'minCount',
+    target_column_name: inferredTargetColumnName,
     property_iri: rule.property_iri || '',
     datatype_iri: rule.datatype_iri || '',
     pattern: rule.pattern || '',
@@ -491,6 +604,94 @@ function openEditDialog({ rule, setEditingRule, setFormData, setIsDialogOpen }) 
     is_enabled: rule.is_enabled ? 1 : 0,
   })
   setIsDialogOpen(true)
+}
+
+/* Detect system columns that should not be used for most rules. */
+function isSystemColumn(columnName) {
+  const name = String(columnName || '').trim().toLowerCase()
+  return name === 'id' || name === 'created_at'
+}
+
+/* Find the best property IRI for an entity column (prefer mappings, fallback to base IRI). */
+function getPropertyIriForEntityColumn({ propertyMappings, baseIri, entityName, columnName }) {
+  const safeEntityName = String(entityName || '').trim()
+  const safeColumnName = String(columnName || '').trim()
+  if (!safeEntityName || !safeColumnName) {
+    return ''
+  }
+
+  const list = Array.isArray(propertyMappings) ? propertyMappings : []
+  const match = list.find(
+    (item) =>
+      String(item?.entity_name || '').trim() === safeEntityName &&
+      String(item?.column_name || '').trim() === safeColumnName &&
+      item?.property_iri,
+  )
+  if (match?.property_iri) {
+    return String(match.property_iri).trim()
+  }
+
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  return `${safeBaseIri}${toCamelCase(safeColumnName)}`
+}
+
+/* Infer the selected column name for an existing rule based on property IRI. */
+function inferTargetColumnNameFromRule({
+  entityColumns,
+  propertyMappings,
+  baseIri,
+  targetEntityName,
+  propertyIri,
+}) {
+  const safeEntityName = String(targetEntityName || '').trim()
+  const safePropertyIri = String(propertyIri || '').trim()
+  if (!safeEntityName || !safePropertyIri) {
+    return ''
+  }
+
+  const list = Array.isArray(propertyMappings) ? propertyMappings : []
+  const match = list.find(
+    (item) =>
+      String(item?.entity_name || '').trim() === safeEntityName &&
+      String(item?.property_iri || '').trim() === safePropertyIri &&
+      item?.column_name,
+  )
+  if (match?.column_name) {
+    return String(match.column_name).trim()
+  }
+
+  const map = entityColumns instanceof Map ? entityColumns : new Map()
+  const availableColumns = (map.get(safeEntityName) || []).filter((columnName) => !isSystemColumn(columnName))
+
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  for (const columnName of availableColumns) {
+    const fallbackIri = `${safeBaseIri}${toCamelCase(columnName)}`
+    if (fallbackIri === safePropertyIri) {
+      return columnName
+    }
+  }
+
+  return ''
+}
+
+/* Convert snake_case to camelCase for local names. */
+function toCamelCase(value) {
+  const parts = String(value || '')
+    .replace(/[^a-zA-Z0-9_]+/g, '_')
+    .split('_')
+    .filter(Boolean)
+
+  if (parts.length === 0) {
+    return 'property'
+  }
+
+  return (
+    parts[0].toLowerCase() +
+    parts
+      .slice(1)
+      .map((item) => item.slice(0, 1).toUpperCase() + item.slice(1).toLowerCase())
+      .join('')
+  )
 }
 
 /* Create/update rule then reload list. */

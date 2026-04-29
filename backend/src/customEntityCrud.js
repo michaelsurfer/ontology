@@ -27,19 +27,15 @@ export function createCustomEntityRow(entityName, inputData) {
   const allowedColumns = entity.fields.filter((field) => field.is_active).map((field) => field.field_name)
   const insertData = pickAllowedColumns(safeInputData, allowedColumns)
 
-  if (Object.keys(insertData).length === 0) {
-    throw new Error('No insertable fields provided')
-  }
-
   const insertColumns = Object.keys(insertData)
-  const insertPlaceholders = insertColumns.map(() => '?')
-  const insertValues = insertColumns.map((columnName) => insertData[columnName])
-
-  const result = database
-    .prepare(
-      `INSERT INTO "${safeTableName}" (${insertColumns.map((name) => `"${name}"`).join(',')}) VALUES (${insertPlaceholders.join(',')})`,
-    )
-    .run(...insertValues)
+  const result =
+    insertColumns.length === 0
+      ? database.prepare(`INSERT INTO "${safeTableName}" DEFAULT VALUES`).run()
+      : database
+          .prepare(
+            `INSERT INTO "${safeTableName}" (${insertColumns.map((name) => `"${name}"`).join(',')}) VALUES (${insertColumns.map(() => '?').join(',')})`,
+          )
+          .run(...insertColumns.map((columnName) => insertData[columnName]))
 
   return database.prepare(`SELECT * FROM "${safeTableName}" WHERE id = ?`).get(result.lastInsertRowid)
 }
