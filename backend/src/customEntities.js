@@ -47,7 +47,7 @@ export function createCustomEntity({ entity_name, display_name, fields, base_iri
       fields: normalizedFields,
     })
 
-    const baseIri = String(base_iri || '').trim() || 'http://example.com/ontology#'
+    const baseIri = String(base_iri || '').trim() || 'http://example.com/context#'
 
     database
       .prepare(
@@ -141,7 +141,7 @@ export function addCustomEntityField({ entity_name, field_name, field_type, is_r
     throw new Error(`Field name is reserved: ${normalizedField.field_name}`)
   }
 
-  const baseIri = String(base_iri || '').trim() || 'http://example.com/ontology#'
+  const baseIri = String(base_iri || '').trim() || 'http://example.com/context#'
 
   const transaction = database.transaction(() => {
     database

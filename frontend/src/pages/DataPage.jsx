@@ -30,18 +30,18 @@ export function DataPage() {
     <Stack spacing={2}>
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Data (Tables)
+          Records
         </Typography>
         <Button component={RouterLink} to="/custom-entities" variant="outlined">
-          Manage entities
+          Manage concepts
         </Button>
         <Button component={RouterLink} to="/automation" variant="contained">
-          Ingest data
+          Ingest records
         </Button>
       </Box>
 
       <Typography variant="body2" color="text.secondary">
-        Browse tables and open them to view and edit rows.
+        Browse your concepts (tables) and open them to view and edit records.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}

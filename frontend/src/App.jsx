@@ -18,6 +18,8 @@ import { DocsPage } from './pages/DocsPage'
 import { AutomationPage } from './pages/AutomationPage'
 import { DataPage } from './pages/DataPage'
 import { AiPage } from './pages/AiPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { IntegrationsPage } from './pages/IntegrationsPage'
 
 const appTheme = createTheme({
   palette: {
@@ -37,12 +39,14 @@ function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/ai" element={<AiPage />} />
             <Route path="/data" element={<DataPage />} />
             <Route path="/relationships" element={<RelationshipsPage />} />
             <Route path="/graph" element={<GraphPage />} />
             <Route path="/rdf" element={<RdfExportPage />} />
             <Route path="/sparql" element={<SparqlPage />} />
+            <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/rules" element={<RulesPage />} />
             <Route path="/custom-entities" element={<CustomEntitiesPage />} />
             <Route path="/custom/:entityName" element={<CustomEntityTablePage />} />

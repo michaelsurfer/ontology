@@ -56,10 +56,10 @@ export function MappingsPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">Mappings</Typography>
+      <Typography variant="h5">Identifiers &amp; Naming</Typography>
       <Typography variant="body2" color="text.secondary">
-        Control how CRM tables become OWL/RDF: base IRI, OWL Class IRI per entity, and the IRI
-        template used for individuals.
+        Control naming and identifiers for your shared context layer: base namespace, IDs, and how
+        records get stable identifiers.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}
@@ -67,7 +67,7 @@ export function MappingsPage() {
       <Card variant="outlined">
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1 }}>
-            Ontology settings
+            Context settings
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -605,7 +605,7 @@ function createEmptyPropertyMappingForm() {
   return {
     entity_name: '',
     column_name: 'id',
-    property_iri: 'http://example.com/ontology#propertyName',
+    property_iri: 'http://example.com/context#propertyName',
     datatype_iri: null,
     language_tag: null,
     _availableEntities: [],

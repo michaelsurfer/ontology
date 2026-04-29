@@ -360,7 +360,7 @@ function startServer() {
 
     try {
       const ontologySettings = getOntologySettings()
-      const baseIri = ontologySettings?.base_iri || 'http://example.com/ontology#'
+      const baseIri = ontologySettings?.base_iri || 'http://example.com/context#'
 
       const enabledRules = getOntologyRules().filter((rule) => rule && rule.is_enabled)
       const rulesContext = {

@@ -17,7 +17,7 @@ export async function generateSparqlFromQuestion({
   }
 
   const model = String(process.env.OPENAI_MODEL || '').trim() || 'gpt-4o-mini'
-  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/context#'
 
   const messages = [
     {
@@ -122,7 +122,7 @@ function ensureSparqlHasCommonPrefixes({ queryText, baseIri }) {
     return normalizedQueryText
   }
 
-  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/context#'
   const requiredPrefixes = [
     { prefix: 'rdf', iri: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#' },
     { prefix: 'rdfs', iri: 'http://www.w3.org/2000/01/rdf-schema#' },

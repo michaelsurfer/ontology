@@ -59,7 +59,7 @@ export function CrmEntityPage() {
   if (!entity) {
     return (
       <Stack spacing={2}>
-        <Typography variant="h5">Data</Typography>
+        <Typography variant="h5">Records</Typography>
         <Typography color="error">Unknown entity: {entityName}</Typography>
       </Stack>
     )

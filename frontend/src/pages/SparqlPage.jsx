@@ -40,9 +40,9 @@ export function SparqlPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">SPARQL Query</Typography>
+      <Typography variant="h5">Query Studio</Typography>
       <Typography variant="body2" color="text.secondary">
-        Run SPARQL against the RDF graph generated from your CRM tables, mappings, and relationship definitions.
+        Run queries against your context layer to explore connected data.
       </Typography>
 
       <Card variant="outlined">
@@ -114,7 +114,7 @@ export function SparqlPage() {
             <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
               <FormControlLabel
                 control={<Checkbox checked={includeOntology} onChange={(e) => setIncludeOntology(e.target.checked)} />}
-                label="Include ontology triples"
+                label="Include model triples"
               />
               <FormControlLabel
                 control={<Checkbox checked={includeData} onChange={(e) => setIncludeData(e.target.checked)} />}
@@ -264,7 +264,7 @@ async function runSparqlQuery({
   }
 }
 
-/* Provide built-in SPARQL templates that match this project's ontology mapping defaults. */
+/* Provide built-in SPARQL templates that match this project's default context namespace. */
 function getSparqlTemplates() {
   return [
     {
@@ -276,7 +276,7 @@ function getSparqlTemplates() {
       queryText: `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
-PREFIX ex: <http://example.com/ontology#>
+PREFIX ex: <http://example.com/context#>
 
 SELECT ?class ?label
 WHERE {
@@ -316,7 +316,7 @@ LIMIT 100
       includeOntology: false,
       includeData: true,
       queryText: `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX ex: <http://example.com/ontology#>
+PREFIX ex: <http://example.com/context#>
 
 SELECT ?contact ?firstName ?lastName ?email
 WHERE {

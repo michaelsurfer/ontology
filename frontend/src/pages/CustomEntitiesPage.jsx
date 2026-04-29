@@ -80,16 +80,16 @@ export function CustomEntitiesPage() {
     <Stack spacing={2}>
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Custom entities
+          Objects
         </Typography>
         <Button variant="contained" onClick={() => setIsDialogOpen(true)}>
-          Create entity
+          Create object
         </Button>
       </Box>
 
       <Typography variant="body2" color="text.secondary">
-        Custom entities are stored as real SQLite tables. Once created, they can be used in the graph,
-        RDF export, SPARQL, and rules.
+        Define Objects schemas can be used in the Context Map,
+        Standards Export, Query Studio, and Guardrails.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}

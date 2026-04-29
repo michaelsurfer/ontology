@@ -43,8 +43,11 @@ export function AppShell() {
   const primaryNavigationItems = getPrimaryNavigationItems()
   const advancedItems = getAdvancedMenuItems()
 
-  const aiMenuItem = primaryNavigationItems.find((item) => item.to === '/ai') || null
-  const primaryItemsAfterAi = primaryNavigationItems.filter((item) => item.to !== '/ai')
+  const topNavigationItemPaths = ['/dashboard', '/ai']
+  const topNavigationItems = primaryNavigationItems.filter((item) => topNavigationItemPaths.includes(item.to))
+  const dashboardMenuItem = topNavigationItems.find((item) => item.to === '/dashboard') || null
+  const aiMenuItem = topNavigationItems.find((item) => item.to === '/ai') || null
+  const primaryItemsAfterTopSection = primaryNavigationItems.filter((item) => !topNavigationItemPaths.includes(item.to))
 
   const isAdvancedSectionActive = advancedItems.some(
     (item) => location.pathname === item.to || location.pathname.startsWith(item.to),
@@ -61,8 +64,23 @@ export function AppShell() {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box sx={{ px: 2, py: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-            Ontology Platform
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 900,
+              lineHeight: 1.05,
+              fontSize: 22,
+              letterSpacing: 0.2,
+            }}
+          >
+            FaistOS
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.25, lineHeight: 1.2 }}
+          >
+            The context layer that keeps AI accurate
           </Typography>
         </Box>
 
@@ -70,6 +88,18 @@ export function AppShell() {
 
         <Box sx={{ flexGrow: 1, py: 1 }}>
           <List dense sx={{ px: 1 }}>
+            {dashboardMenuItem ? (
+              <NavigationListItem
+                key={dashboardMenuItem.to}
+                to={dashboardMenuItem.to}
+                label={dashboardMenuItem.label}
+                currentPath={location.pathname}
+                onNavigate={isDesktopViewport ? null : closeMobileDrawer}
+              />
+            ) : null}
+
+            {dashboardMenuItem && aiMenuItem ? <Divider sx={{ my: 1 }} /> : null}
+
             {aiMenuItem ? (
               <NavigationListItem
                 key={aiMenuItem.to}
@@ -80,9 +110,9 @@ export function AppShell() {
               />
             ) : null}
 
-            {aiMenuItem ? <Divider sx={{ my: 1 }} /> : null}
+            {topNavigationItems.length > 0 ? <Divider sx={{ my: 1 }} /> : null}
 
-            {primaryItemsAfterAi.map((item) => (
+            {primaryItemsAfterTopSection.map((item) => (
               <NavigationListItem
                 key={item.to}
                 to={item.to}
@@ -96,7 +126,7 @@ export function AppShell() {
 
             <NavigationListItem
               to="/data"
-              label="Data"
+              label="Records"
               currentPath={location.pathname}
               onNavigate={isDesktopViewport ? null : closeMobileDrawer}
             />
@@ -104,7 +134,7 @@ export function AppShell() {
             <Divider sx={{ my: 1 }} />
 
             <AdvancedMenuSection
-              label="Advanced Mode"
+              label="Developer Tools"
               currentPath={location.pathname}
               isOpen={isAdvancedMenuOpen}
               setIsOpen={setIsAdvancedMenuOpen}
@@ -174,9 +204,21 @@ export function AppShell() {
             <IconButton color="inherit" edge="start" onClick={toggleMobileDrawer}>
               <MenuIcon />
             </IconButton>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-              Ontology Platform
-            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 900,
+                  fontSize: 20,
+                  letterSpacing: 0.2,
+                }}
+              >
+                FaistOS
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.85 }}>
+                The context layer that keeps AI accurate
+              </Typography>
+            </Box>
           </Toolbar>
         </AppBar>
 
@@ -199,21 +241,23 @@ export function AppShell() {
 /* Provide the primary navigation list shown above the separators. */
 function getPrimaryNavigationItems() {
   return [
-    { to: '/ai', label: 'AI' },
-    { to: '/custom-entities', label: 'Entities' },
+    { to: '/dashboard', label: 'Dashboard' },
+    { to: '/ai', label: 'AI Assistant' },
+    { to: '/custom-entities', label: 'Objects' },
     { to: '/relationships', label: 'Relationships' },
-    { to: '/graph', label: 'Graph' },
+    { to: '/graph', label: 'Context Map' },
   ]
 }
 
 /* Provide navigation items under the Advanced mode section. */
 function getAdvancedMenuItems() {
   return [
-    { to: '/sparql', label: 'SPARQL' },
-    { to: '/rdf', label: 'RDF Export' },
-    { to: '/automation', label: 'Automation' },
-    { to: '/rules', label: 'Rules' },
-    { to: '/mappings', label: 'Mappings' },
+    { to: '/sparql', label: 'Query Studio' },
+    { to: '/rdf', label: 'Standards Export' },
+    { to: '/integrations', label: 'Integrations' },
+    { to: '/automation', label: 'Ingestion Pipelines' },
+    { to: '/rules', label: 'Guardrails' },
+    { to: '/mappings', label: 'Identifiers & Naming' },
   ]
 }
 

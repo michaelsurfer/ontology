@@ -17,7 +17,7 @@ export function DocsPage() {
       <Box>
         <Typography variant="h4">Docs</Typography>
         <Typography variant="body1" color="text.secondary">
-          Developer documentation for the Ontology Platform APIs and the OntoX SDK/CLI.
+          Developer documentation for the FaistOS APIs and the OntoX SDK/CLI.
         </Typography>
       </Box>
 
@@ -102,7 +102,7 @@ export function DocsPage() {
         <CardContent>
           <Typography variant="h6">Ingestion + Suggestions API</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Ingest real-time events, then review and publish ontology suggestions (review before apply).
+            Ingest real-time events, then review and publish suggested changes (review before apply).
           </Typography>
 
           <Divider sx={{ my: 2 }} />
@@ -125,7 +125,7 @@ export function DocsPage() {
             <Typography variant="subtitle2">Example: inject data (POST)</Typography>
             <Typography variant="body2" color="text.secondary">
               This is the single “front door” for real-time data. The backend stores the raw payload and generates draft
-              ontology suggestions for review.
+              suggested changes for review.
             </Typography>
 
             <Typography variant="subtitle2" sx={{ mt: 1 }}>
@@ -185,7 +185,7 @@ export function DocsPage() {
               POST /api/suggestions/publish
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Approve/reject individual suggestions, then publish approved suggestions into the live ontology.
+              Approve/reject individual suggestions, then publish approved suggestions into the live context layer.
             </Typography>
           </Stack>
         </CardContent>
@@ -210,7 +210,7 @@ export function DocsPage() {
           </Typography>
           <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
             {`{
-  "query": "PREFIX ex: <http://example.com/ontology#> SELECT ...",
+  "query": "PREFIX ex: <http://example.com/context#> SELECT ...",
   "includeOntology": true,
   "includeData": true,
   "maxRowsPerEntity": 200
@@ -236,7 +236,7 @@ export function DocsPage() {
         <CardContent>
           <Typography variant="h6">RDF Export API</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Exports Turtle (TTL) for the current ontology + instance data (depending on options).
+            Exports Turtle (TTL) for the current model + instance data (depending on options).
           </Typography>
 
           <Divider sx={{ my: 2 }} />
@@ -277,7 +277,7 @@ const client = new OntoXClient({ baseUrl: 'http://localhost:5174' })
 
 const entities = await client.entities.list()
 const sparqlResult = await client.sparql.query({
-  queryText: 'PREFIX ex: <http://example.com/ontology#> SELECT * WHERE { ?s ?p ?o } LIMIT 5',
+  queryText: 'PREFIX ex: <http://example.com/context#> SELECT * WHERE { ?s ?p ?o } LIMIT 5',
   includeOntology: true,
   includeData: true,
   maxRowsPerEntity: 200,
@@ -305,7 +305,7 @@ client = OntoXClient(base_url="http://localhost:5174")
 
 entities = client.entities.list()
 result = client.sparql.query(
-    query_text="PREFIX ex: <http://example.com/ontology#> SELECT * WHERE { ?s ?p ?o } LIMIT 5",
+    query_text="PREFIX ex: <http://example.com/context#> SELECT * WHERE { ?s ?p ?o } LIMIT 5",
     include_ontology=True,
     include_data=True,
     max_rows_per_entity=200,
@@ -332,7 +332,7 @@ print(result)`}
 node packages/ontox-cli/src/main.js entities list --json
 
 # run SPARQL
-node packages/ontox-cli/src/main.js sparql query --query "PREFIX ex: <http://example.com/ontology#> SELECT * WHERE { ?s ?p ?o } LIMIT 1" --json`}
+node packages/ontox-cli/src/main.js sparql query --query "PREFIX ex: <http://example.com/context#> SELECT * WHERE { ?s ?p ?o } LIMIT 1" --json`}
           </Typography>
 
           <Divider sx={{ my: 2 }} />

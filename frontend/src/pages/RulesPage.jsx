@@ -31,7 +31,7 @@ export function RulesPage() {
   const [rules, setRules] = useState([])
   const [entities, setEntities] = useState([])
   const [propertyMappings, setPropertyMappings] = useState([])
-  const [baseIri, setBaseIri] = useState('http://example.com/ontology#')
+  const [baseIri, setBaseIri] = useState('http://example.com/context#')
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -60,7 +60,7 @@ export function RulesPage() {
     <Stack spacing={2}>
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Rules (SHACL)
+          Guardrails
         </Typography>
         <Button
           variant="contained"
@@ -73,12 +73,12 @@ export function RulesPage() {
             })
           }
         >
-          Add rule
+          Add guardrail
         </Button>
       </Box>
 
       <Typography variant="body2" color="text.secondary">
-        Rules are exported as SHACL shapes and can be used to validate your CRM→RDF graph.
+        Guardrails validate your context layer and highlight data quality issues before AI uses the data.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}
@@ -388,7 +388,7 @@ function RuleDialog({
           label="Property IRI (path)"
           value={formData.property_iri}
           onChange={(event) => setFormData((prev) => ({ ...prev, property_iri: event.target.value }))}
-          placeholder="http://example.com/ontology#accountName"
+          placeholder="http://example.com/context#accountName"
           helperText="This is the RDF property for the selected field. Usually auto-filled from Property Mappings."
           required
         />
@@ -631,7 +631,7 @@ function getPropertyIriForEntityColumn({ propertyMappings, baseIri, entityName, 
     return String(match.property_iri).trim()
   }
 
-  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/context#'
   return `${safeBaseIri}${toCamelCase(safeColumnName)}`
 }
 
@@ -663,7 +663,7 @@ function inferTargetColumnNameFromRule({
   const map = entityColumns instanceof Map ? entityColumns : new Map()
   const availableColumns = (map.get(safeEntityName) || []).filter((columnName) => !isSystemColumn(columnName))
 
-  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/context#'
   for (const columnName of availableColumns) {
     const fallbackIri = `${safeBaseIri}${toCamelCase(columnName)}`
     if (fallbackIri === safePropertyIri) {

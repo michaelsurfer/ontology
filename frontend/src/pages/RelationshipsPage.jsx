@@ -131,9 +131,8 @@ export function RelationshipsPage() {
       <Card variant="outlined">
         <CardContent>
           <Typography variant="body2" color="text.secondary">
-            A relationship is a join rule: subject (table.column) → predicate IRI → object
-            (table.column). It becomes an OWL ObjectProperty and is also used to create RDF links
-            between rows.
+            A relationship is a join rule: subject (table.column) → predicate → object (table.column).
+            It’s used to create links between records and to power the Context Map.
           </Typography>
 
           <Divider sx={{ my: 2 }} />
@@ -311,7 +310,7 @@ function RelationshipDialog({
           onChange={(event) =>
             setFormData((previousData) => ({ ...previousData, predicate_iri: event.target.value }))
           }
-          placeholder="http://example.com/ontology#hasContact"
+          placeholder="http://example.com/context#hasContact"
           required
         />
 
@@ -384,7 +383,7 @@ function createEmptyRelationshipForm() {
     relationship_name: '',
     subject_entity: '',
     subject_column: 'id',
-    predicate_iri: 'http://example.com/ontology#hasRelationship',
+    predicate_iri: 'http://example.com/context#hasRelationship',
     object_entity: '',
     object_column: 'id',
   }

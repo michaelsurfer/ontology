@@ -112,7 +112,7 @@ export function deleteSuggestionsByStatus({ status }) {
 export function publishApprovedSuggestions() {
   const database = getDatabase()
   const settings = getOntologySettings()
-  const baseIri = String(settings?.base_iri || '').trim() || 'http://example.com/ontology#'
+  const baseIri = String(settings?.base_iri || '').trim() || 'http://example.com/context#'
 
   const approvedSuggestions = database
     .prepare("SELECT * FROM ontology_suggestions WHERE status = 'approved' ORDER BY id ASC")

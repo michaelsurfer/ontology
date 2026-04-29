@@ -47,7 +47,7 @@ export function AutomationPage() {
     <Stack spacing={2}>
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Automation
+          Ingestion Pipelines
         </Typography>
         <TextField
           select
@@ -103,7 +103,7 @@ export function AutomationPage() {
 
       <Typography variant="body2" color="text.secondary">
         This page supports “review before apply”. Data arrives via the ingestion endpoint, OntoX generates draft
-        suggestions (entities, fields, relationships, rules), and you approve + publish them into the live ontology.
+        suggestions (concepts, fields, connections, guardrails), and you approve + publish them into the live context layer.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}

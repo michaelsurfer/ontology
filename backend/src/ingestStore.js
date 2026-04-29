@@ -47,7 +47,7 @@ export async function createIngestEvents({ payload }) {
   }
 
   const ontologySettings = getOntologySettings()
-  const baseIri = String(ontologySettings?.base_iri || '').trim() || 'http://example.com/ontology#'
+  const baseIri = String(ontologySettings?.base_iri || '').trim() || 'http://example.com/context#'
 
   const existingEntityNames = new Set(
     database.prepare('SELECT entity_name FROM entity_mappings').all().map((row) => row.entity_name),

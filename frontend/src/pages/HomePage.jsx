@@ -13,10 +13,14 @@ export function HomePage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h4">Ontology Platform</Typography>
+      <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
+        Faistos
+      </Typography>
       <Typography variant="body1" color="text.secondary">
-        This MVP lets you input CRM data, define relationships between tables, convert to RDF/OWL,
-        and visualize the relationship graph.
+        The context layer that keeps AI accurate.
+      </Typography>
+      <Typography variant="body1" color="text.secondary">
+        Create a shared understanding layer over your data so AI stays accurate and consistent.
       </Typography>
 
       {entitiesCount === 0 ? (
@@ -62,7 +66,7 @@ export function HomePage() {
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary">
               Note: The graph view is schema-level (tables/classes + object properties). Data-level
-              graphs can be added next once the ontology is stable.
+              graphs can be added next once the model is stable.
             </Typography>
           </Box>
         </CardContent>

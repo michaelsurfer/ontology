@@ -25,7 +25,7 @@ export function createRdfTurtleExport(exportOptions) {
     .prepare('SELECT * FROM relationship_definitions ORDER BY id ASC')
     .all()
 
-  const baseIri = ontologySettings?.base_iri || 'http://example.com/ontology#'
+  const baseIri = ontologySettings?.base_iri || 'http://example.com/context#'
 
   const writer = new Writer({
     prefixes: {

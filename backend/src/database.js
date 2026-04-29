@@ -179,7 +179,7 @@ export function initializeDatabase() {
     WHERE fingerprint IS NOT NULL;
   `)
 
-  const baseOntologyIri = 'http://example.com/ontology#'
+  const baseOntologyIri = 'http://example.com/context#'
 
   const settingsRow = database
     .prepare('SELECT id, base_iri FROM ontology_settings WHERE id = 1')

@@ -11,7 +11,7 @@ export async function createShaclTurtleExport() {
     .prepare('SELECT id, base_iri FROM ontology_settings WHERE id = 1')
     .get()
 
-  const baseIri = ontologySettings?.base_iri || 'http://example.com/ontology#'
+  const baseIri = ontologySettings?.base_iri || 'http://example.com/context#'
 
   const entityMappings = database
     .prepare('SELECT entity_name, class_iri FROM entity_mappings ORDER BY entity_name ASC')

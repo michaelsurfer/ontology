@@ -23,10 +23,9 @@ export function RdfExportPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">RDF / OWL Export</Typography>
+      <Typography variant="h5">Standards Export</Typography>
       <Typography variant="body2" color="text.secondary">
-        Export as Turtle. Ontology export includes OWL Classes + ObjectProperties + DatatypeProperties
-        with domain/range. Data export includes individuals from CRM rows.
+        Export as Turtle (TTL). This includes your model (schema) and connected records, depending on options.
       </Typography>
 
       <Card variant="outlined">
@@ -35,7 +34,7 @@ export function RdfExportPage() {
             <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap' }}>
               <FormControlLabel
                 control={<Checkbox checked={includeOntology} onChange={(e) => setIncludeOntology(e.target.checked)} />}
-                label="Include ontology (OWL)"
+                label="Include model (OWL)"
               />
               <FormControlLabel
                 control={<Checkbox checked={includeData} onChange={(e) => setIncludeData(e.target.checked)} />}

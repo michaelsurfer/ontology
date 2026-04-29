@@ -48,7 +48,7 @@ export function GraphPage() {
   const [relationshipFormData, setRelationshipFormData] = useState(createEmptyRelationshipForm())
   const [showAdvancedFields, setShowAdvancedFields] = useState(false)
 
-  const [baseIri, setBaseIri] = useState('http://example.com/ontology#')
+  const [baseIri, setBaseIri] = useState('http://example.com/context#')
 
   const [entities, setEntities] = useState([])
 
@@ -108,7 +108,7 @@ export function GraphPage() {
     <Stack spacing={2}>
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          Relationship Graph
+          Context Map
         </Typography>
         <Button
           variant="text"
@@ -127,8 +127,7 @@ export function GraphPage() {
         </Button>
       </Box>
       <Typography variant="body2" color="text.secondary">
-        This graph is schema-level: each node is a CRM table mapped to an OWL Class, and each edge
-        is a user-defined relationship mapped to an OWL ObjectProperty.
+        This is a schema-level map: each node is a concept (table), and each edge is a connection you define.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}
@@ -882,7 +881,7 @@ function suggestRelationshipName({ subjectEntity, objectEntity }) {
 
 /* Build a predicate IRI from a base IRI and a relationship name. */
 function buildPredicateIri(baseIri, relationshipName) {
-  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/ontology#'
+  const safeBaseIri = String(baseIri || '').trim() || 'http://example.com/context#'
   const localName = toCamelCase(String(relationshipName || '').trim() || 'hasRelationship')
   return `${safeBaseIri}${localName}`
 }
