@@ -14,7 +14,7 @@ export function HomePage() {
   return (
     <Stack spacing={2}>
       <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: 0.2 }}>
-        Faistos
+        Mission AI
       </Typography>
       <Typography variant="body1" color="text.secondary">
         The context layer that keeps AI accurate.

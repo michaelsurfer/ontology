@@ -40,7 +40,7 @@ export function SparqlPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">Query Studio</Typography>
+      <Typography variant="h5">SPARQL console</Typography>
       <Typography variant="body2" color="text.secondary">
         Run queries against your context layer to explore connected data.
       </Typography>

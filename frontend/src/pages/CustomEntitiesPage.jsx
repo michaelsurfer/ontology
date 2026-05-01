@@ -89,7 +89,7 @@ export function CustomEntitiesPage() {
 
       <Typography variant="body2" color="text.secondary">
         Define Objects schemas can be used in the Context Map,
-        Standards Export, Query Studio, and Guardrails.
+        Standards Export, SPARQL console, and Guardrails.
       </Typography>
 
       {errorMessage ? <Typography color="error">{errorMessage}</Typography> : null}

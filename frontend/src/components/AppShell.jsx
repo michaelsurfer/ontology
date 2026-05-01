@@ -43,10 +43,10 @@ export function AppShell() {
   const primaryNavigationItems = getPrimaryNavigationItems()
   const advancedItems = getAdvancedMenuItems()
 
-  const topNavigationItemPaths = ['/dashboard', '/ai']
+  const topNavigationItemPaths = ['/dashboard', '/ai-planning']
   const topNavigationItems = primaryNavigationItems.filter((item) => topNavigationItemPaths.includes(item.to))
   const dashboardMenuItem = topNavigationItems.find((item) => item.to === '/dashboard') || null
-  const aiMenuItem = topNavigationItems.find((item) => item.to === '/ai') || null
+  const aiPlanningMenuItem = topNavigationItems.find((item) => item.to === '/ai-planning') || null
   const primaryItemsAfterTopSection = primaryNavigationItems.filter((item) => !topNavigationItemPaths.includes(item.to))
 
   const isAdvancedSectionActive = advancedItems.some(
@@ -73,7 +73,7 @@ export function AppShell() {
               letterSpacing: 0.2,
             }}
           >
-            FaistOS
+            Mission AI
           </Typography>
           <Typography
             variant="caption"
@@ -98,13 +98,13 @@ export function AppShell() {
               />
             ) : null}
 
-            {dashboardMenuItem && aiMenuItem ? <Divider sx={{ my: 1 }} /> : null}
+            {dashboardMenuItem && aiPlanningMenuItem ? <Divider sx={{ my: 1 }} /> : null}
 
-            {aiMenuItem ? (
+            {aiPlanningMenuItem ? (
               <NavigationListItem
-                key={aiMenuItem.to}
-                to={aiMenuItem.to}
-                label={aiMenuItem.label}
+                key={aiPlanningMenuItem.to}
+                to={aiPlanningMenuItem.to}
+                label={aiPlanningMenuItem.label}
                 currentPath={location.pathname}
                 onNavigate={isDesktopViewport ? null : closeMobileDrawer}
               />
@@ -213,7 +213,8 @@ export function AppShell() {
                   letterSpacing: 0.2,
                 }}
               >
-                FaistOS
+
+                Mission AI
               </Typography>
               <Typography variant="caption" sx={{ opacity: 0.85 }}>
                 The context layer that keeps AI accurate
@@ -242,7 +243,7 @@ export function AppShell() {
 function getPrimaryNavigationItems() {
   return [
     { to: '/dashboard', label: 'Dashboard' },
-    { to: '/ai', label: 'AI Assistant' },
+    { to: '/ai-planning', label: 'AI Planning' },
     { to: '/custom-entities', label: 'Objects' },
     { to: '/relationships', label: 'Relationships' },
     { to: '/graph', label: 'Context Map' },
@@ -252,7 +253,8 @@ function getPrimaryNavigationItems() {
 /* Provide navigation items under the Advanced mode section. */
 function getAdvancedMenuItems() {
   return [
-    { to: '/sparql', label: 'Query Studio' },
+    { to: '/ai', label: 'Query Studio' },
+    { to: '/sparql', label: 'SPARQL console' },
     { to: '/rdf', label: 'Standards Export' },
     { to: '/integrations', label: 'Integrations' },
     { to: '/automation', label: 'Ingestion Pipelines' },
@@ -263,7 +265,11 @@ function getAdvancedMenuItems() {
 
 /* Render a navigation list item that highlights when active. */
 function NavigationListItem({ to, label, currentPath, onNavigate }) {
-  const isActive = currentPath === to || (to !== '/' && currentPath.startsWith(to))
+  /* /ai-planning must not activate the /ai link (prefix match). */
+  const isExactMatchRoute = to === '/ai'
+  const isActive = isExactMatchRoute
+    ? currentPath === to || currentPath === `${to}/`
+    : currentPath === to || (to !== '/' && currentPath.startsWith(to))
 
   return (
     <ListItemButton
@@ -298,9 +304,12 @@ function NavigationListItem({ to, label, currentPath, onNavigate }) {
 
 /* Render a collapsible navigation section with child routes. */
 function AdvancedMenuSection({ label, currentPath, isOpen, setIsOpen, items, onNavigate }) {
-  const isSectionActive = items.some(
-    (item) => currentPath === item.to || currentPath.startsWith(item.to),
-  )
+  const isSectionActive = items.some((item) => {
+    if (item.to === '/ai') {
+      return currentPath === '/ai' || currentPath === '/ai/'
+    }
+    return currentPath === item.to || (item.to !== '/' && currentPath.startsWith(item.to))
+  })
 
   return (
     <Box>

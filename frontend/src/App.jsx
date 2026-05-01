@@ -18,6 +18,7 @@ import { DocsPage } from './pages/DocsPage'
 import { AutomationPage } from './pages/AutomationPage'
 import { DataPage } from './pages/DataPage'
 import { AiPage } from './pages/AiPage'
+import { AiPlanningPage } from './pages/AiPlanningPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { IntegrationsPage } from './pages/IntegrationsPage'
 
@@ -41,6 +42,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/ai" element={<AiPage />} />
+            <Route path="/ai-planning" element={<AiPlanningPage />} />
             <Route path="/data" element={<DataPage />} />
             <Route path="/relationships" element={<RelationshipsPage />} />
             <Route path="/graph" element={<GraphPage />} />

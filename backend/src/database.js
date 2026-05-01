@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
 
+import { DEFAULT_PLANNER_SYSTEM_PROMPT } from './aiPlanningDefaults.js'
+
 const databaseFilePath = path.join(process.cwd(), 'data', 'ontology-platform.sqlite')
 
 let databaseInstance = null
@@ -156,6 +158,12 @@ export function initializeDatabase() {
       ai_summary TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS ai_planning_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      planner_system_prompt TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 
   // Lightweight "migration" for older DBs where custom_entity_fields didn't have is_active yet
@@ -190,6 +198,13 @@ export function initializeDatabase() {
     database
       .prepare('INSERT INTO ontology_settings (id, base_iri) VALUES (1, ?)')
       .run(baseOntologyIri)
+  }
+
+  const aiPlanningSettingsRow = database.prepare('SELECT id FROM ai_planning_settings WHERE id = 1').get()
+  if (!aiPlanningSettingsRow) {
+    database
+      .prepare('INSERT INTO ai_planning_settings (id, planner_system_prompt) VALUES (1, ?)')
+      .run(DEFAULT_PLANNER_SYSTEM_PROMPT)
   }
 
   // No default entity mappings, property mappings, relationships, or sample CRM rows are seeded.

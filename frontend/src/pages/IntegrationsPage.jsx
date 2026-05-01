@@ -19,7 +19,7 @@ export function IntegrationsPage() {
       </Box>
 
       <Typography variant="body2" color="text.secondary">
-        Connect external systems to FaistOS. This page is UI-only for now.
+        Connect external systems to Mission AI. This page is UI-only for now.
       </Typography>
 
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap', alignItems: 'stretch' }}>
@@ -110,7 +110,7 @@ function getIntegrationConnectors() {
       title: 'Snowflake',
       category: 'Data warehouse',
       status: 'Coming soon',
-      description: 'Ingest analytical datasets and align them with FaistOS objects and relationships.',
+      description: 'Ingest analytical datasets and align them with Mission AI objects and relationships.',
     },
     {
       key: 'postgres',

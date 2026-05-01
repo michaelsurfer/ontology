@@ -17,7 +17,7 @@ export function DocsPage() {
       <Box>
         <Typography variant="h4">Docs</Typography>
         <Typography variant="body1" color="text.secondary">
-          Developer documentation for the FaistOS APIs and the OntoX SDK/CLI.
+          Developer documentation for the Mission AI APIs and the OntoX SDK/CLI.
         </Typography>
       </Box>
 

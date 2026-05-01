@@ -4,6 +4,7 @@ import cors from 'cors'
 import morgan from 'morgan'
 
 import { initializeDatabase } from './database.js'
+import { seedDroneOntology } from './seedDroneOntology.js'
 import { createRdfTurtleExport } from './rdfExport.js'
 import {
   deleteById,
@@ -35,6 +36,13 @@ import { getSchemaGraph } from './schemaGraph.js'
 import { executeSparqlQuery } from './sparqlQuery.js'
 import { createOpenAiClient } from './openaiClient.js'
 import { answerQuestionWithSparql } from './aiChat.js'
+import { runPlanningAgent } from './aiPlanning.js'
+import {
+  getPlannerSystemPrompt,
+  setPlannerSystemPrompt,
+  getPlannerSystemPromptRow,
+} from './aiPlanningSettings.js'
+import { DEFAULT_PLANNER_SYSTEM_PROMPT, PLANNER_FINALIZE_PROMPT_APPEND } from './aiPlanningDefaults.js'
 import {
   addCustomEntityField,
   createCustomEntity,
@@ -74,6 +82,7 @@ import {
 /* Start the Express server that powers the ontology platform API. */
 function startServer() {
   initializeDatabase()
+  seedDroneOntology()
 
   const openAiClient = createOpenAiClient()
 
@@ -438,6 +447,111 @@ function startServer() {
       })
     } catch (error) {
       response.status(500).json({ error: error?.message ? String(error.message) : 'AI request failed' })
+    }
+  })
+
+  // AI planning prompts (stored in ai_planning_settings)
+  app.get('/api/ai/plan/prompt', (request, response) => {
+    try {
+      const effective = getPlannerSystemPrompt()
+      const row = getPlannerSystemPromptRow()
+      response.json({
+        plannerSystemPrompt: effective,
+        defaultPlannerSystemPrompt: DEFAULT_PLANNER_SYSTEM_PROMPT,
+        storedPlannerSystemPrompt: row?.planner_system_prompt ?? null,
+        updatedAt: row?.updated_at ?? null,
+        finalizePromptAppend: PLANNER_FINALIZE_PROMPT_APPEND,
+        finalizeSystemPromptCombined: `${effective} ${PLANNER_FINALIZE_PROMPT_APPEND}`,
+        userIterationPayloadShape:
+          'JSON with iteration, max_iterations, user_goal, prior_query_results (summarized trace rows).',
+        userFinalizePayloadShape:
+          'JSON with user_goal, prior_query_results (full trace), instruction: finish with action complete.',
+      })
+    } catch (error) {
+      response.status(500).json({ error: error?.message ? String(error.message) : 'Failed to read prompt' })
+    }
+  })
+
+  app.put('/api/ai/plan/prompt', (request, response) => {
+    try {
+      const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+      const promptText = safeBody.plannerSystemPrompt ?? safeBody.planner_system_prompt ?? ''
+      const row = setPlannerSystemPrompt(promptText)
+      const effective = getPlannerSystemPrompt()
+      response.json({
+        plannerSystemPrompt: effective,
+        row,
+        defaultPlannerSystemPrompt: DEFAULT_PLANNER_SYSTEM_PROMPT,
+        finalizePromptAppend: PLANNER_FINALIZE_PROMPT_APPEND,
+        finalizeSystemPromptCombined: `${effective} ${PLANNER_FINALIZE_PROMPT_APPEND}`,
+      })
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Failed to save prompt' })
+    }
+  })
+
+  // AI planning agent (loop: planner ↔ SPARQL skill)
+  app.post('/api/ai/plan', async (request, response) => {
+    const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+    const goalText = String(safeBody.goal || safeBody.message || '').trim()
+    if (!goalText) {
+      response.status(400).json({ error: 'goal (or message) is required' })
+      return
+    }
+
+    if (!openAiClient) {
+      response.status(400).json({ error: 'OpenAI is not configured (missing OPENAI_API_KEY)' })
+      return
+    }
+
+    try {
+      const ontologySettings = getOntologySettings()
+      const baseIri = ontologySettings?.base_iri || 'http://example.com/context#'
+
+      const enabledRules = getOntologyRules().filter((rule) => rule && rule.is_enabled)
+      const rulesContext = {
+        enabledRulesCount: enabledRules.length,
+        enabledRules: enabledRules.map((rule) => ({
+          id: rule.id,
+          rule_name: rule.rule_name,
+          target_entity: rule.target_entity,
+          rule_kind: rule.rule_kind,
+          property_iri: rule.property_iri,
+        })),
+      }
+
+      const schemaContext = {
+        ontologySettings,
+        entityMappings: getEntityMappings(),
+        propertyMappings: getPropertyMappings(),
+        relationships: getRelationshipDefinitions(),
+        rules: rulesContext,
+      }
+
+      const maxRowsPerEntity = Number.isFinite(safeBody.maxRowsPerEntity)
+        ? Number(safeBody.maxRowsPerEntity)
+        : 200
+      const exportOptions = {
+        includeOntology: safeBody.includeOntology !== false,
+        includeData: safeBody.includeData !== false,
+        maxRowsPerEntity,
+      }
+
+      const maxIterationsRaw = safeBody.max_iterations ?? safeBody.maxIterations
+      const maxIterations = Number.isFinite(Number(maxIterationsRaw)) ? Number(maxIterationsRaw) : 5
+
+      const result = await runPlanningAgent({
+        openAiClient,
+        userGoal: goalText,
+        baseIri,
+        schemaContext,
+        exportOptions,
+        maxIterations,
+      })
+
+      response.json(result)
+    } catch (error) {
+      response.status(500).json({ error: error?.message ? String(error.message) : 'Planning request failed' })
     }
   })
 

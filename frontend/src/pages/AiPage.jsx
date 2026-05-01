@@ -16,7 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { apiClient } from '../api/apiClient'
+import { apiClient, LONG_RUNNING_AI_TIMEOUT_MS } from '../api/apiClient'
 
 /* A basic AI chat room that can answer using SPARQL data. */
 export function AiPage() {
@@ -115,10 +115,14 @@ export function AiPage() {
     setInputText('')
 
     try {
-      const response = await apiClient.post('/ai/chat', {
-        message: normalizedInput,
-        rules_checking_enabled: isRulesCheckingEnabled,
-      })
+      const response = await apiClient.post(
+        '/ai/chat',
+        {
+          message: normalizedInput,
+          rules_checking_enabled: isRulesCheckingEnabled,
+        },
+        { timeout: LONG_RUNNING_AI_TIMEOUT_MS },
+      )
       const data = response.data || {}
       const rulesValidationFromResponse =
         data.rulesValidation && typeof data.rulesValidation === 'object' ? data.rulesValidation : null
@@ -159,7 +163,7 @@ export function AiPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">AI</Typography>
+      <Typography variant="h5">Query Studio</Typography>
       <Typography variant="body2" color="text.secondary">
         Ask questions in plain English. The assistant will generate SPARQL, query your graph, and summarize the result.
       </Typography>
