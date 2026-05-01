@@ -44,6 +44,22 @@ function mergePromptPutResponse(previousInfo, data) {
   }
 }
 
+/* Derive a readable list of graph-query steps from the planner trace for the approval step. */
+function plannedActionsFromTrace(traceSteps) {
+  if (!Array.isArray(traceSteps) || traceSteps.length === 0) {
+    return []
+  }
+  return traceSteps.map((step, index) => ({
+    key: `step-${step.step ?? index}`,
+    stepLabel: step.step ?? index + 1,
+    question: step.question ? String(step.question).trim() : '',
+    reason: step.reason ? String(step.reason).trim() : '',
+    rowCount: Number.isFinite(step.rowCount) ? step.rowCount : 0,
+    queryOk: step.ok !== false,
+    queryError: step.error ? String(step.error) : '',
+  }))
+}
+
 /* AI Planning page: looping planner that calls the SPARQL skill to gather facts, then proposes a plan. */
 export function AiPlanningPage() {
   const [goalText, setGoalText] = useState('')
@@ -56,6 +72,7 @@ export function AiPlanningPage() {
   const [draftPlannerPrompt, setDraftPlannerPrompt] = useState('')
   const [isSavingPrompt, setIsSavingPrompt] = useState(false)
   const [promptSaveError, setPromptSaveError] = useState('')
+  const [planAnswerRevealed, setPlanAnswerRevealed] = useState(false)
   const scrollAnchorRef = useRef(null)
 
   /* Load planner system prompt from the API (matches ai_planning_settings in the database). */
@@ -133,6 +150,8 @@ export function AiPlanningPage() {
     return lastResult.trace
   }, [lastResult])
 
+  const plannedActionItems = useMemo(() => plannedActionsFromTrace(traceSteps), [traceSteps])
+
   function scrollToBottom() {
     const element = scrollAnchorRef.current
     if (element && typeof element.scrollIntoView === 'function') {
@@ -149,6 +168,7 @@ export function AiPlanningPage() {
     setIsLoading(true)
     setErrorMessage('')
     setLastResult(null)
+    setPlanAnswerRevealed(false)
 
     try {
       const response = await apiClient.post(
@@ -180,12 +200,13 @@ export function AiPlanningPage() {
     <Stack spacing={2}>
       <Typography variant="h5">AI Planning</Typography>
       <Typography variant="body2" color="text.secondary">
-        Describe an operational goal. The planner queries your ontology (via the SPARQL skill) in a loop, then
-        drafts a plan grounded in the rows returned. This does not save missions or waypoints unless you add them
-        elsewhere.
+        Describe an operational goal. The planner queries your ontology (via the SPARQL skill) in a loop. When it
+        finishes successfully, you first see the planned graph lookups, approve them, then read the written answer.
+        Technical SPARQL detail stays under an expandable trace. This does not save missions or waypoints unless you
+        add them elsewhere.
       </Typography>
 
-      <Accordion defaultExpanded>
+      <Accordion defaultExpanded={false}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="subtitle2">Current planner prompts</Typography>
         </AccordionSummary>
@@ -321,47 +342,145 @@ export function AiPlanningPage() {
                 </Typography>
               ) : null}
 
-              <Divider />
-
-              <Typography variant="subtitle2">Plan</Typography>
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: 'background.default',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                <Typography variant="body2">{planText || '(no plan text)'}</Typography>
-              </Box>
-
-              {lastResult.caveats ? (
+              {ok ? (
                 <>
-                  <Typography variant="subtitle2">Caveats</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {String(lastResult.caveats)}
-                  </Typography>
-                </>
-              ) : null}
-
-              {Array.isArray(lastResult.assumptions) && lastResult.assumptions.length > 0 ? (
-                <>
-                  <Typography variant="subtitle2">Assumptions</Typography>
-                  <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                    {lastResult.assumptions.map((item, index) => (
-                      <Typography component="li" variant="body2" key={`${index}:${item}`}>
-                        {String(item)}
+                  {!planAnswerRevealed ? (
+                    <>
+                      <Divider />
+                      <Typography variant="subtitle2">Planned actions</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        The planner ran these graph lookups (via NL→SPARQL). Review them, then approve to see the
+                        written answer for your goal.
                       </Typography>
-                    ))}
+                      {plannedActionItems.length === 0 ? (
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            No intermediate graph queries were recorded in the trace (the planner may have answered
+                            directly). Approve below to show the synthesized answer.
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Stack spacing={1.5}>
+                          {plannedActionItems.map((item) => (
+                            <Box
+                              key={item.key}
+                              sx={{
+                                p: 1.5,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                bgcolor: 'background.default',
+                              }}
+                            >
+                              <Typography variant="caption" color="text.secondary">
+                                Step {item.stepLabel}
+                                {!item.queryOk ? ' • query issue' : ''}
+                              </Typography>
+                              {item.question ? (
+                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                  {item.question}
+                                </Typography>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                  (no question text)
+                                </Typography>
+                              )}
+                              {item.reason ? (
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                  Reason: {item.reason}
+                                </Typography>
+                              ) : null}
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                Rows returned: {item.rowCount}
+                                {item.queryError ? ` • ${item.queryError}` : ''}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      )}
+                      <Box sx={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 1, pt: 0.5 }}>
+                        <Button
+                          variant="contained"
+                          onClick={() => {
+                            setPlanAnswerRevealed(true)
+                            setTimeout(scrollToBottom, 50)
+                          }}
+                        >
+                          Approve and show answer
+                        </Button>
+                      </Box>
+                    </>
+                  ) : (
+                    <>
+                      <Divider />
+                      <Typography variant="subtitle2">Answer</Typography>
+                      <Box
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          bgcolor: 'background.default',
+                          whiteSpace: 'pre-wrap',
+                        }}
+                      >
+                        <Typography variant="body2">{planText || '(no plan text)'}</Typography>
+                      </Box>
+
+                      {lastResult.caveats ? (
+                        <>
+                          <Typography variant="subtitle2">Caveats</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                            {String(lastResult.caveats)}
+                          </Typography>
+                        </>
+                      ) : null}
+
+                      {Array.isArray(lastResult.assumptions) && lastResult.assumptions.length > 0 ? (
+                        <>
+                          <Typography variant="subtitle2">Assumptions</Typography>
+                          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                            {lastResult.assumptions.map((item, index) => (
+                              <Typography component="li" variant="body2" key={`${index}:${item}`}>
+                                {String(item)}
+                              </Typography>
+                            ))}
+                          </Box>
+                        </>
+                      ) : null}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Divider />
+                  <Typography variant="subtitle2">Plan</Typography>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: 'background.default',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    <Typography variant="body2">{planText || '(no plan text)'}</Typography>
                   </Box>
                 </>
-              ) : null}
+              )}
 
-              <Accordion defaultExpanded={traceSteps.length > 0}>
+              <Accordion defaultExpanded={false}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle2">Planner trace ({traceSteps.length} steps)</Typography>
+                  <Typography variant="subtitle2">Planner trace — technical detail ({traceSteps.length} steps)</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Stack spacing={2}>
@@ -420,10 +539,10 @@ export function AiPlanningPage() {
                         />
                       </Box>
                     ))}
-                    <div ref={scrollAnchorRef} />
                   </Stack>
                 </AccordionDetails>
               </Accordion>
+              <div ref={scrollAnchorRef} />
             </Stack>
           </CardContent>
         </Card>

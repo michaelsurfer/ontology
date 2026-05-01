@@ -1,6 +1,9 @@
 import { runSparqlSkill, tryChatJson } from './sparqlSkill.js'
 import { getPlannerSystemPrompt } from './aiPlanningSettings.js'
-import { PLANNER_FINALIZE_PROMPT_APPEND } from './aiPlanningDefaults.js'
+import {
+  PLANNER_FINALIZE_PROMPT_APPEND,
+  PLANNER_SYNTHESIS_RUNTIME_APPEND,
+} from './aiPlanningDefaults.js'
 
 /**
  * Planning agent loop: repeatedly chooses NL graph queries (via SPARQL skill) until it emits a plan.
@@ -151,9 +154,19 @@ export async function runPlanningAgent({
   })
 }
 
+/* Combine DB/default planner prompt with a fixed synthesis reminder (see aiPlanningDefaults). */
+function buildPlannerSystemPromptForModel() {
+  const base = getPlannerSystemPrompt()
+  const suffix = String(PLANNER_SYNTHESIS_RUNTIME_APPEND || '').trim()
+  if (!suffix) {
+    return base
+  }
+  return `${base} ${suffix}`.trim()
+}
+
 /* Ask the planner model for the next JSON decision. */
 async function requestPlannerDecision({ openAiClient, model, plannerPayload }) {
-  const systemPrompt = getPlannerSystemPrompt()
+  const systemPrompt = buildPlannerSystemPromptForModel()
   const messages = [
     { role: 'system', content: systemPrompt },
     {
@@ -167,7 +180,7 @@ async function requestPlannerDecision({ openAiClient, model, plannerPayload }) {
 
 /* After hitting the iteration cap, ask once more for a complete plan using gathered rows. */
 async function forceCompletePlan({ openAiClient, model, userGoal, trace }) {
-  const systemPrompt = getPlannerSystemPrompt()
+  const systemPrompt = buildPlannerSystemPromptForModel()
   const messages = [
     { role: 'system', content: `${systemPrompt} ${PLANNER_FINALIZE_PROMPT_APPEND}` },
     {

@@ -4,7 +4,6 @@ import cors from 'cors'
 import morgan from 'morgan'
 
 import { initializeDatabase } from './database.js'
-import { seedDroneOntology } from './seedDroneOntology.js'
 import { createRdfTurtleExport } from './rdfExport.js'
 import {
   deleteById,
@@ -82,7 +81,6 @@ import {
 /* Start the Express server that powers the ontology platform API. */
 function startServer() {
   initializeDatabase()
-  seedDroneOntology()
 
   const openAiClient = createOpenAiClient()
 
