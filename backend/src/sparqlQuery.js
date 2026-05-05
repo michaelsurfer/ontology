@@ -1,7 +1,6 @@
-import { Parser, Store } from 'n3'
-import { Graph, HashMapDataset, PlanBuilder } from 'sparql-engine'
-
 import { createRdfTurtleExport } from './rdfExport.js'
+
+const defaultRdfCacheServiceUrl = 'http://127.0.0.1:8181'
 
 /* Execute a SPARQL query against the current in-memory RDF graph. */
 export async function executeSparqlQuery({ queryText, exportOptions }) {
@@ -10,131 +9,110 @@ export async function executeSparqlQuery({ queryText, exportOptions }) {
     throw new Error('queryText is required')
   }
 
-  const turtleText = await createRdfTurtleExport(exportOptions || {})
-  const store = buildStoreFromTurtle(turtleText)
-
-  const graph = new InMemoryN3Graph(store)
-  const dataset = new HashMapDataset('http://example.com/graph/default', graph)
-
-  const planBuilder = new PlanBuilder(dataset)
-  const iterator = planBuilder.build(normalizedQueryText)
-
-  const bindingsRows = await collectBindings(iterator)
-  const variables = getVariablesFromBindingsRows(bindingsRows)
-
-  return {
-    variables,
-    rows: bindingsRows,
-  }
-}
-
-/* Build an in-memory N3 Store from a Turtle string. */
-function buildStoreFromTurtle(turtleText) {
-  const parser = new Parser()
-  const quads = parser.parse(String(turtleText || ''))
-  return new Store(quads)
-}
-
-/* Collect query results from a sparql-engine iterator. */
-function collectBindings(iterator) {
-  return new Promise((resolve, reject) => {
-    const rows = []
-
-    iterator.subscribe(
-      (bindings) => {
-        if (bindings && typeof bindings.toObject === 'function') {
-          rows.push(normalizeBindingsObject(bindings.toObject()))
-          return
-        }
-
-        rows.push(bindings)
-      },
-      (error) => reject(error),
-      () => resolve(rows),
-    )
+  return executeSparqlQueryViaRust({
+    queryText: normalizedQueryText,
+    exportOptions: exportOptions || {},
   })
 }
 
-/* Normalize bindings values into readable strings where possible. */
-function normalizeBindingsObject(bindingsObject) {
-  const normalizedBindings = {}
-  const safeBindingsObject = bindingsObject && typeof bindingsObject === 'object' ? bindingsObject : {}
-
-  for (const [variableName, value] of Object.entries(safeBindingsObject)) {
-    normalizedBindings[variableName] = normalizeRdfValue(value)
+/* Execute SPARQL using Rust cache service (Oxigraph) with automatic cache warm-up. */
+async function executeSparqlQueryViaRust({ queryText, exportOptions }) {
+  const response = await postRustSparqlQuery({ queryText })
+  if (response.ok) {
+    return response
   }
 
-  return normalizedBindings
+  const safeErrorText = String(response.error || '')
+  const cacheLooksEmpty =
+    safeErrorText.toLowerCase().includes('cache is empty') ||
+    safeErrorText.toLowerCase().includes('invalid turtle in cache')
+
+  if (!cacheLooksEmpty) {
+    throw new Error(response.error || 'Rust SPARQL query failed')
+  }
+
+  const turtleText = await createRdfTurtleExport(exportOptions || {})
+  const loadResult = await loadRustCacheFromTurtle({ turtleText, replace: true })
+  if (!loadResult.ok) {
+    throw new Error(loadResult.error || 'Failed to load RDF cache in Rust service')
+  }
+
+  const retryResponse = await postRustSparqlQuery({ queryText })
+  if (!retryResponse.ok) {
+    throw new Error(retryResponse.error || 'Rust SPARQL query failed after cache warm-up')
+  }
+  return retryResponse
 }
 
-/* Convert a binding value into a stable string representation. */
-function normalizeRdfValue(value) {
-  if (value === null || value === undefined) {
+/* Build Rust cache-service base URL from env with local default. */
+function getRustCacheServiceUrl() {
+  return String(process.env.RDF_CACHE_URL || defaultRdfCacheServiceUrl)
+    .trim()
+    .replace(/\/+$/, '')
+}
+
+/* POST a SPARQL query to Rust service and normalize the response. */
+async function postRustSparqlQuery({ queryText }) {
+  const endpoint = `${getRustCacheServiceUrl()}/sparql/query`
+  let response = null
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: queryText }),
+    })
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error || 'Rust service unavailable') }
+  }
+
+  const payload = await safelyParseJson(response)
+  if (!response.ok) {
+    return { ok: false, error: String(payload?.error || `HTTP ${response.status}`) }
+  }
+
+  return {
+    ok: true,
+    variables: Array.isArray(payload?.variables) ? payload.variables : [],
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
+  }
+}
+
+/* Load Turtle data into Rust cache service. */
+async function loadRustCacheFromTurtle({ turtleText, replace }) {
+  const endpoint = `${getRustCacheServiceUrl()}/cache/load`
+  let response = null
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        turtle: String(turtleText || ''),
+        replace: Boolean(replace),
+      }),
+    })
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error || 'Rust service unavailable') }
+  }
+
+  const payload = await safelyParseJson(response)
+  if (!response.ok) {
+    return { ok: false, error: String(payload?.error || `HTTP ${response.status}`) }
+  }
+  return { ok: true }
+}
+
+/* Parse JSON safely without throwing to keep fallback behavior stable. */
+async function safelyParseJson(response) {
+  try {
+    return await response.json()
+  } catch (error) {
     return null
-  }
-
-  if (typeof value === 'string') {
-    return value
-  }
-
-  if (typeof value === 'object') {
-    if (typeof value.id === 'string') {
-      return value.id
-    }
-    if (typeof value.value === 'string') {
-      return value.value
-    }
-  }
-
-  return String(value)
-}
-
-/* Derive a variable list from returned rows. */
-function getVariablesFromBindingsRows(bindingsRows) {
-  const variablesSet = new Set()
-
-  for (const row of bindingsRows) {
-    if (!row || typeof row !== 'object') {
-      continue
-    }
-    for (const variableName of Object.keys(row)) {
-      variablesSet.add(variableName)
-    }
-  }
-
-  return Array.from(variablesSet)
-}
-
-/* Convert a SPARQL triple pattern into N3 Store query terms. */
-function formatTriplePattern(triplePattern) {
-  const subject = triplePattern.subject.startsWith('?') ? null : triplePattern.subject
-  const predicate = triplePattern.predicate.startsWith('?') ? null : triplePattern.predicate
-  const object = triplePattern.object.startsWith('?') ? null : triplePattern.object
-  return { subject, predicate, object }
-}
-
-/* A sparql-engine Graph implementation backed by an in-memory N3 Store. */
-class InMemoryN3Graph extends Graph {
-  constructor(store) {
-    super()
-    this.store = store
-  }
-
-  /* Find triples matching a triple pattern (null = wildcard). */
-  find(triplePattern) {
-    const { subject, predicate, object } = formatTriplePattern(triplePattern)
-    const quads = this.store.getQuads(subject, predicate, object, null)
-    return quads.map((quad) => ({
-      subject: quad.subject.id,
-      predicate: quad.predicate.id,
-      object: quad.object.id,
-    }))
-  }
-
-  /* Estimate cardinality of a triple pattern to improve query planning. */
-  estimateCardinality(triplePattern) {
-    const { subject, predicate, object } = formatTriplePattern(triplePattern)
-    return Promise.resolve(this.store.countQuads(subject, predicate, object, null))
   }
 }
 

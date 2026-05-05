@@ -98,6 +98,35 @@ function resolveCustomEntityMutationError(error) {
   return { status: 400, message }
 }
 
+/* Best-effort refresh of Rust RDF cache after successful graph-affecting mutations. */
+async function refreshRustRdfCacheBestEffort() {
+  const rustCacheUrl = String(process.env.RDF_CACHE_URL || 'http://127.0.0.1:8181')
+    .trim()
+    .replace(/\/+$/, '')
+  const exportOptions = {
+    includeOntology: true,
+    includeData: true,
+    maxRowsPerEntity: 200,
+  }
+
+  try {
+    const turtleText = await createRdfTurtleExport(exportOptions)
+    await fetch(`${rustCacheUrl}/cache/load`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        turtle: String(turtleText || ''),
+        replace: true,
+      }),
+    })
+  } catch (error) {
+    // Keep write APIs non-blocking even if Rust cache service is unavailable.
+  }
+}
+
 /* Start the Express server that powers the ontology platform API. */
 function startServer() {
   initializeDatabase()
@@ -185,44 +214,49 @@ function startServer() {
     response.json(getRelationshipDefinitions())
   })
 
-  app.post('/api/relationships', (request, response) => {
+  app.post('/api/relationships', async (request, response) => {
     try {
       const settings = getOntologySettings()
       const createdRelationshipDefinition = createRelationshipDefinition({
         ...(request.body && typeof request.body === 'object' ? request.body : {}),
         base_iri: settings?.base_iri,
       })
+      await refreshRustRdfCacheBestEffort()
       response.status(201).json(createdRelationshipDefinition)
     } catch (error) {
       response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid relationship' })
     }
   })
 
-  app.put('/api/relationships/:id', (request, response) => {
+  app.put('/api/relationships/:id', async (request, response) => {
     try {
       const settings = getOntologySettings()
       const updatedRelationshipDefinition = updateRelationshipDefinition(request.params.id, {
         ...(request.body && typeof request.body === 'object' ? request.body : {}),
         base_iri: settings?.base_iri,
       })
+      await refreshRustRdfCacheBestEffort()
       response.json(updatedRelationshipDefinition)
     } catch (error) {
       response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid relationship' })
     }
   })
 
-  app.delete('/api/relationships/:id', (request, response) => {
+  app.delete('/api/relationships/:id', async (request, response) => {
     deleteRelationshipDefinition(request.params.id)
+    await refreshRustRdfCacheBestEffort()
     response.status(204).end()
   })
 
-  app.delete('/api/relationships', (request, response) => {
+  app.delete('/api/relationships', async (request, response) => {
     const confirm = String(request.query.confirm || '').trim()
     if (confirm !== 'yes') {
       response.status(400).json({ error: 'Add ?confirm=yes to delete all relationships' })
       return
     }
-    response.json(deleteAllRelationshipDefinitions())
+    const result = deleteAllRelationshipDefinitions()
+    await refreshRustRdfCacheBestEffort()
+    response.json(result)
   })
 
   // Ontology + mapping routes
@@ -230,58 +264,68 @@ function startServer() {
     response.json(getOntologySettings())
   })
 
-  app.put('/api/ontology/settings', (request, response) => {
-    response.json(updateOntologySettings(request.body))
+  app.put('/api/ontology/settings', async (request, response) => {
+    const result = updateOntologySettings(request.body)
+    await refreshRustRdfCacheBestEffort()
+    response.json(result)
   })
 
   app.get('/api/mappings/entities', (request, response) => {
     response.json(getEntityMappings())
   })
 
-  app.put('/api/mappings/entities/:entityName', (request, response) => {
-    response.json(upsertEntityMapping(request.params.entityName, request.body))
+  app.put('/api/mappings/entities/:entityName', async (request, response) => {
+    const result = upsertEntityMapping(request.params.entityName, request.body)
+    await refreshRustRdfCacheBestEffort()
+    response.json(result)
   })
 
-  app.delete('/api/mappings/entities/:entityName', (request, response) => {
+  app.delete('/api/mappings/entities/:entityName', async (request, response) => {
     const result = deleteEntityMapping(request.params.entityName)
     if (!result.deleted) {
       response.status(404).json({ error: 'Not found' })
       return
     }
+    await refreshRustRdfCacheBestEffort()
     response.status(204).end()
   })
 
-  app.delete('/api/mappings/entities', (request, response) => {
+  app.delete('/api/mappings/entities', async (request, response) => {
     const confirm = String(request.query.confirm || '').trim()
     if (confirm !== 'yes') {
       response.status(400).json({ error: 'Add ?confirm=yes to delete all entity mappings' })
       return
     }
-    response.json(deleteAllEntityMappings())
+    const result = deleteAllEntityMappings()
+    await refreshRustRdfCacheBestEffort()
+    response.json(result)
   })
 
   app.get('/api/mappings/properties', (request, response) => {
     response.json(getPropertyMappings())
   })
 
-  app.put('/api/mappings/properties/:entityName/:columnName', (request, response) => {
-    response.json(
-      upsertPropertyMapping(request.params.entityName, request.params.columnName, request.body),
-    )
+  app.put('/api/mappings/properties/:entityName/:columnName', async (request, response) => {
+    const result = upsertPropertyMapping(request.params.entityName, request.params.columnName, request.body)
+    await refreshRustRdfCacheBestEffort()
+    response.json(result)
   })
 
-  app.delete('/api/mappings/properties/:entityName/:columnName', (request, response) => {
+  app.delete('/api/mappings/properties/:entityName/:columnName', async (request, response) => {
     deletePropertyMapping(request.params.entityName, request.params.columnName)
+    await refreshRustRdfCacheBestEffort()
     response.status(204).end()
   })
 
-  app.delete('/api/mappings/properties', (request, response) => {
+  app.delete('/api/mappings/properties', async (request, response) => {
     const confirm = String(request.query.confirm || '').trim()
     if (confirm !== 'yes') {
       response.status(400).json({ error: 'Add ?confirm=yes to delete all property mappings' })
       return
     }
-    response.json(deleteAllPropertyMappings())
+    const result = deleteAllPropertyMappings()
+    await refreshRustRdfCacheBestEffort()
+    response.json(result)
   })
 
   // RDF export
@@ -307,7 +351,7 @@ function startServer() {
     response.json(entity)
   })
 
-  app.post('/api/custom-entities', (request, response) => {
+  app.post('/api/custom-entities', async (request, response) => {
     try {
       const settings = getOntologySettings()
       const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
@@ -317,6 +361,7 @@ function startServer() {
         fields: safeBody.fields,
         base_iri: settings?.base_iri,
       })
+      await refreshRustRdfCacheBestEffort()
       response.status(201).json(createdEntity)
     } catch (error) {
       const { status, message } = resolveCustomEntityMutationError(error)
@@ -324,9 +369,10 @@ function startServer() {
     }
   })
 
-  app.delete('/api/custom-entities/:entityName', (request, response) => {
+  app.delete('/api/custom-entities/:entityName', async (request, response) => {
     try {
       deleteCustomEntity({ entity_name: request.params.entityName })
+      await refreshRustRdfCacheBestEffort()
       response.status(204).end()
     } catch (error) {
       const { status, message } = resolveCustomEntityMutationError(error)
@@ -334,7 +380,7 @@ function startServer() {
     }
   })
 
-  app.post('/api/custom-entities/:entityName/fields', (request, response) => {
+  app.post('/api/custom-entities/:entityName/fields', async (request, response) => {
     try {
       const settings = getOntologySettings()
       const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
@@ -345,6 +391,7 @@ function startServer() {
         is_required: safeBody.is_required,
         base_iri: settings?.base_iri,
       })
+      await refreshRustRdfCacheBestEffort()
       response.status(201).json(createdEntity)
     } catch (error) {
       const { status, message } = resolveCustomEntityMutationError(error)
@@ -352,7 +399,7 @@ function startServer() {
     }
   })
 
-  app.put('/api/custom-entities/:entityName/fields/:fieldId', (request, response) => {
+  app.put('/api/custom-entities/:entityName/fields/:fieldId', async (request, response) => {
     try {
       const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
       const updatedEntity = updateCustomEntityField({
@@ -361,6 +408,7 @@ function startServer() {
         is_required: safeBody.is_required,
         is_active: safeBody.is_active,
       })
+      await refreshRustRdfCacheBestEffort()
       response.json(updatedEntity)
     } catch (error) {
       const { status, message } = resolveCustomEntityMutationError(error)
@@ -376,25 +424,30 @@ function startServer() {
     }
   })
 
-  app.post('/api/custom/:entityName', (request, response) => {
+  app.post('/api/custom/:entityName', async (request, response) => {
     try {
-      response.status(201).json(createCustomEntityRow(request.params.entityName, request.body))
+      const createdRow = createCustomEntityRow(request.params.entityName, request.body)
+      await refreshRustRdfCacheBestEffort()
+      response.status(201).json(createdRow)
     } catch (error) {
       response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid request' })
     }
   })
 
-  app.put('/api/custom/:entityName/:id', (request, response) => {
+  app.put('/api/custom/:entityName/:id', async (request, response) => {
     try {
-      response.json(updateCustomEntityRow(request.params.entityName, request.params.id, request.body))
+      const updatedRow = updateCustomEntityRow(request.params.entityName, request.params.id, request.body)
+      await refreshRustRdfCacheBestEffort()
+      response.json(updatedRow)
     } catch (error) {
       response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid request' })
     }
   })
 
-  app.delete('/api/custom/:entityName/:id', (request, response) => {
+  app.delete('/api/custom/:entityName/:id', async (request, response) => {
     try {
       deleteCustomEntityRow(request.params.entityName, request.params.id)
+      await refreshRustRdfCacheBestEffort()
       response.status(204).end()
     } catch (error) {
       response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid request' })

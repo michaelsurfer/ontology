@@ -22,7 +22,6 @@
     "n3": "^2.0.3",
     "openai": "^6.34.0",
     "rdf-validate-shacl": "^0.6.5",
-    "sparql-engine": "^0.8.3",
     "uuid": "^14.0.0"
   }
 }
