@@ -85,6 +85,10 @@ export function initializeDatabase() {
       predicate_iri TEXT NOT NULL,
       object_entity TEXT NOT NULL,
       object_column TEXT NOT NULL,
+      junction_entity TEXT,
+      junction_subject_column TEXT,
+      junction_object_column TEXT,
+      junction_auto_created INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -111,6 +115,7 @@ export function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       entity_name TEXT NOT NULL UNIQUE,
       display_name TEXT NOT NULL,
+      is_link_table INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -178,6 +183,27 @@ export function initializeDatabase() {
   const suggestionColumnNames = new Set(suggestionColumns.map((row) => row.name))
   if (!suggestionColumnNames.has('fingerprint')) {
     database.exec('ALTER TABLE ontology_suggestions ADD COLUMN fingerprint TEXT')
+  }
+
+  const relationshipDefinitionColumns = database.prepare("PRAGMA table_info('relationship_definitions')").all()
+  const relationshipDefinitionColumnNames = new Set(relationshipDefinitionColumns.map((row) => row.name))
+  if (!relationshipDefinitionColumnNames.has('junction_entity')) {
+    database.exec('ALTER TABLE relationship_definitions ADD COLUMN junction_entity TEXT')
+  }
+  if (!relationshipDefinitionColumnNames.has('junction_subject_column')) {
+    database.exec('ALTER TABLE relationship_definitions ADD COLUMN junction_subject_column TEXT')
+  }
+  if (!relationshipDefinitionColumnNames.has('junction_object_column')) {
+    database.exec('ALTER TABLE relationship_definitions ADD COLUMN junction_object_column TEXT')
+  }
+  if (!relationshipDefinitionColumnNames.has('junction_auto_created')) {
+    database.exec('ALTER TABLE relationship_definitions ADD COLUMN junction_auto_created INTEGER NOT NULL DEFAULT 0')
+  }
+
+  const customEntityColumns = database.prepare("PRAGMA table_info('custom_entities')").all()
+  const customEntityColumnNames = new Set(customEntityColumns.map((row) => row.name))
+  if (!customEntityColumnNames.has('is_link_table')) {
+    database.exec('ALTER TABLE custom_entities ADD COLUMN is_link_table INTEGER NOT NULL DEFAULT 0')
   }
 
   // Ensure a unique index exists for suggestion fingerprints (dedupe)

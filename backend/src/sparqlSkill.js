@@ -1,4 +1,5 @@
 import { executeSparqlQuery } from './sparqlQuery.js'
+import { enrichSchemaContextForSparql } from './sparqlSchemaContext.js'
 
 /* Generate a SPARQL query from a natural-language question (shared by chat and planning agents). */
 export async function generateSparqlFromQuestion({
@@ -26,9 +27,13 @@ export async function generateSparqlFromQuestion({
         'You are a helpful data assistant. You translate user questions into SPARQL SELECT queries to run against an RDF graph. ' +
         'Return JSON only with keys: sparql, notes. ' +
         'Rules: use SELECT (no INSERT/DELETE/LOAD). Always include a LIMIT 50 unless the user explicitly asks for more. ' +
-        'Prefer using the provided IRIs (class_iri, property_iri, predicate_iri) over guessing. ' +
+        'Copy IRIs exactly from the payload: use predicate_iri, domain_class_iri, and range_class_iri from sparqlRelationshipHints — never invent property or class IRIs. ' +
+        'If the user asks how two tables/entities are linked, match sparqlRelationshipHints by subject_entity and object_entity, then start from copy_ready_sparql_fragment (adapt variable names and add FILTER/BIND only as needed). ' +
+        'If the user asks to show/list members/items (not just counts), include at least one human-readable literal column in SELECT using OPTIONAL with domain_readable_property_iris or range_readable_property_iris (for example ?personName), so output is not only IRIs. ' +
         'If you use prefixes (ex:, rdf:, rdfs:, owl:, xsd:, res:), you MUST include PREFIX declarations in the SPARQL. ' +
-        'Use the prefix ex: for the base IRI when appropriate.',
+        'Use the prefix ex: for the base IRI when appropriate. ' +
+        'Relationships may be stored in SQL link tables (uses_sql_link_table / sql_link_table). The exported RDF graph has only direct triples: ' +
+        '?domainIndividual <predicate_iri> ?rangeIndividual. Do not use rdf:type on the junction table name and do not model link rows as resources.',
     },
     {
       role: 'user',
@@ -91,7 +96,7 @@ export async function runSparqlSkill({
       openAiClient,
       questionText,
       baseIri,
-      schemaContext,
+      schemaContext: enrichSchemaContextForSparql(schemaContext),
     })
     model = generation.model
     sparqlNotes = generation.notes || ''

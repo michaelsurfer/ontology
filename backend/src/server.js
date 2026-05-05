@@ -78,6 +78,26 @@ import {
   rejectSuggestion,
 } from './suggestionsStore.js'
 
+/* Map thrown errors from custom entity routes to HTTP status + message (avoid opaque 500s). */
+function resolveCustomEntityMutationError(error) {
+  const message = error && error.message ? String(error.message) : 'Request failed'
+  const sqliteCode = error && typeof error.code === 'string' ? error.code : ''
+  if (message === 'Custom entity not found' || message === 'Field not found') {
+    return { status: 404, message }
+  }
+  if (message.startsWith('Field already exists:') || message.startsWith('Entity already exists:')) {
+    return { status: 409, message }
+  }
+  if (
+    sqliteCode.startsWith('SQLITE_CONSTRAINT') ||
+    message.includes('UNIQUE constraint') ||
+    message.toLowerCase().includes('duplicate column')
+  ) {
+    return { status: 409, message }
+  }
+  return { status: 400, message }
+}
+
 /* Start the Express server that powers the ontology platform API. */
 function startServer() {
   initializeDatabase()
@@ -166,16 +186,29 @@ function startServer() {
   })
 
   app.post('/api/relationships', (request, response) => {
-    const createdRelationshipDefinition = createRelationshipDefinition(request.body)
-    response.status(201).json(createdRelationshipDefinition)
+    try {
+      const settings = getOntologySettings()
+      const createdRelationshipDefinition = createRelationshipDefinition({
+        ...(request.body && typeof request.body === 'object' ? request.body : {}),
+        base_iri: settings?.base_iri,
+      })
+      response.status(201).json(createdRelationshipDefinition)
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid relationship' })
+    }
   })
 
   app.put('/api/relationships/:id', (request, response) => {
-    const updatedRelationshipDefinition = updateRelationshipDefinition(
-      request.params.id,
-      request.body,
-    )
-    response.json(updatedRelationshipDefinition)
+    try {
+      const settings = getOntologySettings()
+      const updatedRelationshipDefinition = updateRelationshipDefinition(request.params.id, {
+        ...(request.body && typeof request.body === 'object' ? request.body : {}),
+        base_iri: settings?.base_iri,
+      })
+      response.json(updatedRelationshipDefinition)
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid relationship' })
+    }
   })
 
   app.delete('/api/relationships/:id', (request, response) => {
@@ -275,53 +308,97 @@ function startServer() {
   })
 
   app.post('/api/custom-entities', (request, response) => {
-    const settings = getOntologySettings()
-    const createdEntity = createCustomEntity({
-      ...request.body,
-      base_iri: settings?.base_iri,
-    })
-    response.status(201).json(createdEntity)
+    try {
+      const settings = getOntologySettings()
+      const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+      const createdEntity = createCustomEntity({
+        entity_name: safeBody.entity_name,
+        display_name: safeBody.display_name,
+        fields: safeBody.fields,
+        base_iri: settings?.base_iri,
+      })
+      response.status(201).json(createdEntity)
+    } catch (error) {
+      const { status, message } = resolveCustomEntityMutationError(error)
+      response.status(status).json({ error: message })
+    }
   })
 
   app.delete('/api/custom-entities/:entityName', (request, response) => {
-    deleteCustomEntity({ entity_name: request.params.entityName })
-    response.status(204).end()
+    try {
+      deleteCustomEntity({ entity_name: request.params.entityName })
+      response.status(204).end()
+    } catch (error) {
+      const { status, message } = resolveCustomEntityMutationError(error)
+      response.status(status).json({ error: message })
+    }
   })
 
   app.post('/api/custom-entities/:entityName/fields', (request, response) => {
-    const settings = getOntologySettings()
-    const createdEntity = addCustomEntityField({
-      entity_name: request.params.entityName,
-      ...request.body,
-      base_iri: settings?.base_iri,
-    })
-    response.status(201).json(createdEntity)
+    try {
+      const settings = getOntologySettings()
+      const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+      const createdEntity = addCustomEntityField({
+        entity_name: request.params.entityName,
+        field_name: safeBody.field_name,
+        field_type: safeBody.field_type,
+        is_required: safeBody.is_required,
+        base_iri: settings?.base_iri,
+      })
+      response.status(201).json(createdEntity)
+    } catch (error) {
+      const { status, message } = resolveCustomEntityMutationError(error)
+      response.status(status).json({ error: message })
+    }
   })
 
   app.put('/api/custom-entities/:entityName/fields/:fieldId', (request, response) => {
-    const updatedEntity = updateCustomEntityField({
-      entity_name: request.params.entityName,
-      field_id: request.params.fieldId,
-      ...request.body,
-    })
-    response.json(updatedEntity)
+    try {
+      const safeBody = request.body && typeof request.body === 'object' ? request.body : {}
+      const updatedEntity = updateCustomEntityField({
+        entity_name: request.params.entityName,
+        field_id: request.params.fieldId,
+        is_required: safeBody.is_required,
+        is_active: safeBody.is_active,
+      })
+      response.json(updatedEntity)
+    } catch (error) {
+      const { status, message } = resolveCustomEntityMutationError(error)
+      response.status(status).json({ error: message })
+    }
   })
 
   app.get('/api/custom/:entityName', (request, response) => {
-    response.json(listCustomEntityRows(request.params.entityName))
+    try {
+      response.json(listCustomEntityRows(request.params.entityName))
+    } catch (error) {
+      response.status(404).json({ error: error?.message ? String(error.message) : 'Not found' })
+    }
   })
 
   app.post('/api/custom/:entityName', (request, response) => {
-    response.status(201).json(createCustomEntityRow(request.params.entityName, request.body))
+    try {
+      response.status(201).json(createCustomEntityRow(request.params.entityName, request.body))
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid request' })
+    }
   })
 
   app.put('/api/custom/:entityName/:id', (request, response) => {
-    response.json(updateCustomEntityRow(request.params.entityName, request.params.id, request.body))
+    try {
+      response.json(updateCustomEntityRow(request.params.entityName, request.params.id, request.body))
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid request' })
+    }
   })
 
   app.delete('/api/custom/:entityName/:id', (request, response) => {
-    deleteCustomEntityRow(request.params.entityName, request.params.id)
-    response.status(204).end()
+    try {
+      deleteCustomEntityRow(request.params.entityName, request.params.id)
+      response.status(204).end()
+    } catch (error) {
+      response.status(400).json({ error: error?.message ? String(error.message) : 'Invalid request' })
+    }
   })
 
   // Entities list (for UI dropdowns / graph join suggestions)

@@ -5,6 +5,41 @@ import {
   PLANNER_SYNTHESIS_RUNTIME_APPEND,
 } from './aiPlanningDefaults.js'
 
+const QUERY_GRAPH_ACTION_ALIASES = new Set([
+  'query_graph',
+  'request_ontology_facts',
+  'ontology_facts',
+  'request_facts',
+  'query_ontology',
+  'graph_query',
+  'retrieve_facts',
+  'sparql_query',
+  'fetch_graph',
+])
+
+const COMPLETE_ACTION_ALIASES = new Set(['complete', 'finish', 'done', 'final_answer'])
+
+/* Map mistaken action strings from the model to canonical query_graph or complete. */
+function normalizePlannerDecisionAction(parsed) {
+  if (!parsed || typeof parsed !== 'object') {
+    return parsed
+  }
+  const raw = String(parsed.action || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+  let canonical = parsed.action
+  if (QUERY_GRAPH_ACTION_ALIASES.has(raw)) {
+    canonical = 'query_graph'
+  } else if (COMPLETE_ACTION_ALIASES.has(raw)) {
+    canonical = 'complete'
+  }
+  if (canonical === parsed.action) {
+    return parsed
+  }
+  return { ...parsed, action: canonical }
+}
+
 /**
  * Planning agent loop: repeatedly chooses NL graph queries (via SPARQL skill) until it emits a plan.
  * Uses planner_system_prompt from ai_planning_settings (see getPlannerSystemPrompt).
@@ -48,11 +83,13 @@ export async function runPlanningAgent({
       })),
     }
 
-    const parsed = await requestPlannerDecision({
-      openAiClient,
-      model,
-      plannerPayload,
-    })
+    const parsed = normalizePlannerDecisionAction(
+      await requestPlannerDecision({
+        openAiClient,
+        model,
+        plannerPayload,
+      }),
+    )
 
     if (!parsed) {
       return buildFailure({
@@ -193,7 +230,7 @@ async function forceCompletePlan({ openAiClient, model, userGoal, trace }) {
     },
   ]
 
-  const parsed = await tryChatJson({ openAiClient, model, messages })
+  const parsed = normalizePlannerDecisionAction(await tryChatJson({ openAiClient, model, messages }))
   if (parsed && parsed.action === 'complete') {
     return {
       planText: String(parsed.plan || '').trim() || '(empty plan)',

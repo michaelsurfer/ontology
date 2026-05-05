@@ -3,6 +3,15 @@ import { getDatabase } from './database.js'
 
 const { namedNode, literal, quad } = DataFactory
 
+/* Quote a SQLite identifier so reserved words (e.g. group, order) are valid. */
+function quoteSqlIdent(rawName) {
+  const name = String(rawName ?? '').trim()
+  if (!name) {
+    throw new Error('SQL identifier is empty')
+  }
+  return `"${name.replace(/"/g, '""')}"`
+}
+
 /* Generate a Turtle export that includes OWL schema and/or instance data. */
 export function createRdfTurtleExport(exportOptions) {
   const normalizedExportOptions = normalizeExportOptions(exportOptions)
@@ -159,7 +168,7 @@ function addInstanceDataTriples(writer, { entityMappings, propertyMappings, rela
 
   for (const entityMapping of entityMappings) {
     const rows = database
-      .prepare(`SELECT * FROM ${entityMapping.entity_name} ORDER BY id ASC LIMIT ?`)
+      .prepare(`SELECT * FROM ${quoteSqlIdent(entityMapping.entity_name)} ORDER BY id ASC LIMIT ?`)
       .all(maxRowsPerEntity)
 
     const entityPropertyMappings = propertyMappingsByEntityName.get(entityMapping.entity_name) || []
@@ -194,47 +203,156 @@ function addInstanceDataTriples(writer, { entityMappings, propertyMappings, rela
       continue
     }
 
-    const subjectRows = database
-      .prepare(
-        `SELECT id, ${relationshipDefinition.subject_column} AS join_value FROM ${relationshipDefinition.subject_entity} LIMIT ?`,
-      )
-      .all(maxRowsPerEntity)
+    if (relationshipDefinitionUsesJunction(relationshipDefinition)) {
+      emitJunctionManyToManyTriples({
+        writer,
+        database,
+        relationshipDefinition,
+        subjectEntityMapping,
+        objectEntityMapping,
+        iriByEntityAndId,
+        maxRowsPerEntity,
+      })
+    } else {
+      emitDirectJoinObjectPropertyTriples({
+        writer,
+        database,
+        relationshipDefinition,
+        subjectEntityMapping,
+        objectEntityMapping,
+        iriByEntityAndId,
+        maxRowsPerEntity,
+      })
+    }
+  }
+}
 
-    const objectRows = database
-      .prepare(
-        `SELECT id, ${relationshipDefinition.object_column} AS join_value FROM ${relationshipDefinition.object_entity} LIMIT ?`,
-      )
-      .all(maxRowsPerEntity)
+/* True when this relationship links subject and object rows through a junction table (many-to-many). */
+function relationshipDefinitionUsesJunction(relationshipDefinition) {
+  const junctionTable = relationshipDefinition && relationshipDefinition.junction_entity
+  const junctionSubjectCol = relationshipDefinition && relationshipDefinition.junction_subject_column
+  const junctionObjectCol = relationshipDefinition && relationshipDefinition.junction_object_column
+  return Boolean(
+    String(junctionTable || '').trim() &&
+      String(junctionSubjectCol || '').trim() &&
+      String(junctionObjectCol || '').trim(),
+  )
+}
 
-    const objectIdsByJoinValue = new Map()
-    for (const objectRow of objectRows) {
-      if (objectRow.join_value === null || objectRow.join_value === undefined) {
-        continue
-      }
-      const mapKey = String(objectRow.join_value)
-      const list = objectIdsByJoinValue.get(mapKey) || []
-      list.push(objectRow.id)
-      objectIdsByJoinValue.set(mapKey, list)
+/* Emit object-property triples where subject and object rows match on one pair of columns (1:1 / 1:N style joins). */
+function emitDirectJoinObjectPropertyTriples({
+  writer,
+  database,
+  relationshipDefinition,
+  subjectEntityMapping,
+  objectEntityMapping,
+  iriByEntityAndId,
+  maxRowsPerEntity,
+}) {
+  const subjectTable = quoteSqlIdent(relationshipDefinition.subject_entity)
+  const objectTable = quoteSqlIdent(relationshipDefinition.object_entity)
+  const subjectCol = quoteSqlIdent(relationshipDefinition.subject_column)
+  const objectCol = quoteSqlIdent(relationshipDefinition.object_column)
+
+  const subjectRows = database
+    .prepare(`SELECT id, ${subjectCol} AS join_value FROM ${subjectTable} LIMIT ?`)
+    .all(maxRowsPerEntity)
+
+  const objectRows = database
+    .prepare(`SELECT id, ${objectCol} AS join_value FROM ${objectTable} LIMIT ?`)
+    .all(maxRowsPerEntity)
+
+  const objectIdsByJoinValue = new Map()
+  for (const objectRow of objectRows) {
+    if (objectRow.join_value === null || objectRow.join_value === undefined) {
+      continue
+    }
+    const mapKey = String(objectRow.join_value)
+    const list = objectIdsByJoinValue.get(mapKey) || []
+    list.push(objectRow.id)
+    objectIdsByJoinValue.set(mapKey, list)
+  }
+
+  for (const subjectRow of subjectRows) {
+    if (subjectRow.join_value === null || subjectRow.join_value === undefined) {
+      continue
     }
 
-    for (const subjectRow of subjectRows) {
-      if (subjectRow.join_value === null || subjectRow.join_value === undefined) {
-        continue
-      }
+    const subjectIri =
+      iriByEntityAndId.get(`${relationshipDefinition.subject_entity}:${subjectRow.id}`) ||
+      applySubjectIriTemplate(subjectEntityMapping.subject_iri_template, { id: subjectRow.id })
 
-      const subjectIri =
-        iriByEntityAndId.get(`${relationshipDefinition.subject_entity}:${subjectRow.id}`) ||
-        applySubjectIriTemplate(subjectEntityMapping.subject_iri_template, { id: subjectRow.id })
+    const matchedObjectIds = objectIdsByJoinValue.get(String(subjectRow.join_value)) || []
+    for (const objectId of matchedObjectIds) {
+      const objectIri =
+        iriByEntityAndId.get(`${relationshipDefinition.object_entity}:${objectId}`) ||
+        applySubjectIriTemplate(objectEntityMapping.subject_iri_template, { id: objectId })
 
-      const matchedObjectIds = objectIdsByJoinValue.get(String(subjectRow.join_value)) || []
-      for (const objectId of matchedObjectIds) {
-        const objectIri =
-          iriByEntityAndId.get(`${relationshipDefinition.object_entity}:${objectId}`) ||
-          applySubjectIriTemplate(objectEntityMapping.subject_iri_template, { id: objectId })
-
-        writer.addQuad(quad(namedNode(subjectIri), namedNode(relationshipDefinition.predicate_iri), namedNode(objectIri)))
-      }
+      writer.addQuad(quad(namedNode(subjectIri), namedNode(relationshipDefinition.predicate_iri), namedNode(objectIri)))
     }
+  }
+}
+
+/* Emit object-property triples for link-table relationships (two FK columns per link row). */
+function emitJunctionManyToManyTriples({
+  writer,
+  database,
+  relationshipDefinition,
+  subjectEntityMapping,
+  objectEntityMapping,
+  iriByEntityAndId,
+  maxRowsPerEntity,
+}) {
+  const junctionTable = String(relationshipDefinition.junction_entity || '').trim()
+  const junctionSubjectCol = String(relationshipDefinition.junction_subject_column || '').trim()
+  const junctionObjectCol = String(relationshipDefinition.junction_object_column || '').trim()
+  const subjectEntity = String(relationshipDefinition.subject_entity || '').trim()
+  const objectEntity = String(relationshipDefinition.object_entity || '').trim()
+  const subjectColumn = String(relationshipDefinition.subject_column || '').trim()
+  const objectColumn = String(relationshipDefinition.object_column || '').trim()
+
+  const junctionRowLimit = Math.min(10000, Math.max(maxRowsPerEntity, maxRowsPerEntity * 10))
+
+  const junctionRows = database
+    .prepare(
+      `SELECT ${quoteSqlIdent(junctionSubjectCol)} AS subject_join, ${quoteSqlIdent(
+        junctionObjectCol,
+      )} AS object_join FROM ${quoteSqlIdent(junctionTable)} LIMIT ?`,
+    )
+    .all(junctionRowLimit)
+
+  const resolveSubjectId = database.prepare(
+    `SELECT id FROM ${quoteSqlIdent(subjectEntity)} WHERE ${quoteSqlIdent(subjectColumn)} = ? LIMIT 1`,
+  )
+  const resolveObjectId = database.prepare(
+    `SELECT id FROM ${quoteSqlIdent(objectEntity)} WHERE ${quoteSqlIdent(objectColumn)} = ? LIMIT 1`,
+  )
+
+  for (const junctionRow of junctionRows) {
+    if (
+      junctionRow.subject_join === null ||
+      junctionRow.subject_join === undefined ||
+      junctionRow.object_join === null ||
+      junctionRow.object_join === undefined
+    ) {
+      continue
+    }
+
+    const subjectRow = resolveSubjectId.get(junctionRow.subject_join)
+    const objectRow = resolveObjectId.get(junctionRow.object_join)
+    if (!subjectRow || !objectRow) {
+      continue
+    }
+
+    const subjectIri =
+      iriByEntityAndId.get(`${subjectEntity}:${subjectRow.id}`) ||
+      applySubjectIriTemplate(subjectEntityMapping.subject_iri_template, { id: subjectRow.id })
+
+    const objectIri =
+      iriByEntityAndId.get(`${objectEntity}:${objectRow.id}`) ||
+      applySubjectIriTemplate(objectEntityMapping.subject_iri_template, { id: objectRow.id })
+
+    writer.addQuad(quad(namedNode(subjectIri), namedNode(relationshipDefinition.predicate_iri), namedNode(objectIri)))
   }
 }
 

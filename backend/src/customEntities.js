@@ -11,7 +11,14 @@ const reservedEntityNames = new Set([
 ])
 
 /* Create a custom entity and its underlying SQL table. */
-export function createCustomEntity({ entity_name, display_name, fields, base_iri }) {
+export function createCustomEntity({
+  entity_name,
+  display_name,
+  fields,
+  base_iri,
+  is_link_table: isLinkTable = false,
+  omit_ontology_metadata: omitOntologyMetadata = false,
+}) {
   const database = getDatabase()
 
   const normalizedEntityName = normalizeIdentifier(entity_name)
@@ -28,8 +35,8 @@ export function createCustomEntity({ entity_name, display_name, fields, base_iri
 
   const createEntityTransaction = database.transaction(() => {
     const entityResult = database
-      .prepare('INSERT INTO custom_entities (entity_name, display_name) VALUES (?, ?)')
-      .run(normalizedEntityName, normalizedDisplayName)
+      .prepare('INSERT INTO custom_entities (entity_name, display_name, is_link_table) VALUES (?, ?, ?)')
+      .run(normalizedEntityName, normalizedDisplayName, isLinkTable ? 1 : 0)
 
     const customEntityId = entityResult.lastInsertRowid
 
@@ -47,34 +54,36 @@ export function createCustomEntity({ entity_name, display_name, fields, base_iri
       fields: normalizedFields,
     })
 
-    const baseIri = String(base_iri || '').trim() || 'http://example.com/context#'
+    if (!omitOntologyMetadata) {
+      const baseIri = String(base_iri || '').trim() || 'http://example.com/context#'
 
-    database
-      .prepare(
-        `
+      database
+        .prepare(
+          `
         INSERT INTO entity_mappings (entity_name, class_iri, subject_iri_template)
         VALUES (?, ?, ?)
       `,
-      )
-      .run(
-        normalizedEntityName,
-        `${baseIri}${toPascalCase(normalizedEntityName)}`,
-        `http://example.com/resource/${normalizedEntityName}/{id}`,
-      )
+        )
+        .run(
+          normalizedEntityName,
+          `${baseIri}${toPascalCase(normalizedEntityName)}`,
+          `http://example.com/resource/${normalizedEntityName}/{id}`,
+        )
 
-    const insertPropertyMapping = database.prepare(`
+      const insertPropertyMapping = database.prepare(`
       INSERT OR IGNORE INTO property_mappings (entity_name, column_name, property_iri, datatype_iri, language_tag)
       VALUES (?, ?, ?, ?, ?)
     `)
 
-    for (const field of normalizedFields) {
-      insertPropertyMapping.run(
-        normalizedEntityName,
-        field.field_name,
-        `${baseIri}${toCamelCase(field.field_name)}`,
-        sqliteTypeToXsdDatatype(field.field_type),
-        null,
-      )
+      for (const field of normalizedFields) {
+        insertPropertyMapping.run(
+          normalizedEntityName,
+          field.field_name,
+          `${baseIri}${toCamelCase(field.field_name)}`,
+          sqliteTypeToXsdDatatype(field.field_type),
+          null,
+        )
+      }
     }
 
     return getCustomEntityByName(normalizedEntityName)
@@ -83,11 +92,101 @@ export function createCustomEntity({ entity_name, display_name, fields, base_iri
   return createEntityTransaction()
 }
 
+/* Turn a relationship label into a short SQL-safe slug for link table names. */
+function slugifyRelationshipNameForLinkTable(relationshipName) {
+  const raw = String(relationshipName || '').trim().toLowerCase()
+  let slug = raw
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_+/g, '_')
+  if (!slug || !/^[a-z]/.test(slug)) {
+    slug = `rel${slug ? `_${slug}` : ''}`.replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'rel'
+  }
+  if (!/^[a-z][a-z0-9_]*$/.test(slug)) {
+    slug = 'rel'
+  }
+  if (slug.length > 28) {
+    slug = slug.slice(0, 28).replace(/_+$/, '') || 'rel'
+  }
+  return slug
+}
+
+/* Create a link table for a relationship (subject id + object id); hidden from Objects list. */
+export function createAutomatedLinkTableEntity({ subject_entity, object_entity, relationship_name, base_iri }) {
+  const subjectName = normalizeIdentifier(subject_entity)
+  const objectName = normalizeIdentifier(object_entity)
+  const relSlug = slugifyRelationshipNameForLinkTable(relationship_name)
+  const junctionSubjectColumn = `${subjectName}_id`
+  const junctionObjectColumn = `${objectName}_id`
+
+  let baseTableName = `link_${subjectName}_${relSlug}_${objectName}`
+  if (baseTableName.length > 52) {
+    baseTableName = baseTableName.slice(0, 52).replace(/_+$/, '') || `link_${subjectName}_${objectName}`
+  }
+
+  let tableName = baseTableName
+  let suffix = 2
+  while (getCustomEntityByName(tableName) || reservedEntityNames.has(tableName)) {
+    const extra = `_${suffix}`
+    tableName = `${baseTableName.slice(0, Math.max(1, 63 - extra.length))}${extra}`
+    suffix += 1
+  }
+
+  const displayName = `Link: ${String(relationship_name || '').trim() || `${subjectName} ↔ ${objectName}`}`
+
+  createCustomEntity({
+    entity_name: tableName,
+    display_name: displayName,
+    fields: [
+      { field_name: junctionSubjectColumn, field_type: 'INTEGER', is_required: false },
+      { field_name: junctionObjectColumn, field_type: 'INTEGER', is_required: false },
+    ],
+    base_iri,
+    is_link_table: true,
+    omit_ontology_metadata: true,
+  })
+
+  return {
+    entity_name: tableName,
+    junction_subject_column: junctionSubjectColumn,
+    junction_object_column: junctionObjectColumn,
+  }
+}
+
+/* Remove a link table created for relationships only (does not delete relationship_definitions rows). */
+export function deleteAutomatedLinkTableOnly({ entity_name }) {
+  const database = getDatabase()
+  const normalizedName = normalizeIdentifier(entity_name)
+  const entity = database
+    .prepare('SELECT id, entity_name, is_link_table FROM custom_entities WHERE entity_name = ?')
+    .get(normalizedName)
+
+  if (!entity) {
+    return { deleted: false }
+  }
+
+  if (!Number(entity.is_link_table || 0)) {
+    throw new Error('Entity is not an automated link table')
+  }
+
+  const transaction = database.transaction(() => {
+    database.prepare('DELETE FROM property_mappings WHERE entity_name = ?').run(entity.entity_name)
+    database.prepare('DELETE FROM entity_mappings WHERE entity_name = ?').run(entity.entity_name)
+    database.exec(`DROP TABLE IF EXISTS "${entity.entity_name}"`)
+    database.prepare('DELETE FROM custom_entities WHERE id = ?').run(entity.id)
+  })
+
+  transaction()
+  return { deleted: true, entity_name: entity.entity_name }
+}
+
 /* Return a list of custom entities with fields. */
 export function listCustomEntities() {
   const database = getDatabase()
   const entities = database
-    .prepare('SELECT id, entity_name, display_name, created_at FROM custom_entities ORDER BY created_at DESC')
+    .prepare(
+      'SELECT id, entity_name, display_name, created_at FROM custom_entities WHERE COALESCE(is_link_table, 0) = 0 ORDER BY created_at DESC',
+    )
     .all()
 
   return entities.map((entity) => ({
@@ -139,6 +238,13 @@ export function addCustomEntityField({ entity_name, field_name, field_type, is_r
   const reservedColumns = new Set(['id', 'created_at'])
   if (reservedColumns.has(normalizedField.field_name)) {
     throw new Error(`Field name is reserved: ${normalizedField.field_name}`)
+  }
+
+  const isDuplicateFieldName = entity.fields.some(
+    (existingField) => existingField.field_name === normalizedField.field_name,
+  )
+  if (isDuplicateFieldName) {
+    throw new Error(`Field already exists: ${normalizedField.field_name}`)
   }
 
   const baseIri = String(base_iri || '').trim() || 'http://example.com/context#'
@@ -224,11 +330,18 @@ export function deleteCustomEntity({ entity_name }) {
     throw new Error('Custom entity not found')
   }
 
+  const linkMetaRow = database.prepare('SELECT is_link_table FROM custom_entities WHERE id = ?').get(entity.id)
+  if (linkMetaRow && Number(linkMetaRow.is_link_table || 0)) {
+    throw new Error('Link tables created for relationships cannot be deleted here. Remove the relationship first.')
+  }
+
   const transaction = database.transaction(() => {
     // Remove relationships that reference this entity
     database
-      .prepare('DELETE FROM relationship_definitions WHERE subject_entity = ? OR object_entity = ?')
-      .run(entity.entity_name, entity.entity_name)
+      .prepare(
+        'DELETE FROM relationship_definitions WHERE subject_entity = ? OR object_entity = ? OR junction_entity = ?',
+      )
+      .run(entity.entity_name, entity.entity_name, entity.entity_name)
 
     // Remove rules targeting this entity
     database.prepare('DELETE FROM ontology_rules WHERE target_entity = ?').run(entity.entity_name)

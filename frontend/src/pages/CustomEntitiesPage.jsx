@@ -69,6 +69,15 @@ export function CustomEntitiesPage() {
     if (formData.fields.some((field) => !field.field_name.trim())) {
       return false
     }
+    if (formData.fields.some((field) => getFieldNameErrorText(field.field_name))) {
+      return false
+    }
+    const fieldNames = formData.fields.map((field) =>
+      String(field.field_name || '').trim().toLowerCase(),
+    )
+    if (new Set(fieldNames).size !== fieldNames.length) {
+      return false
+    }
     return true
   }, [formData, entities])
 
@@ -275,6 +284,11 @@ export function CustomEntitiesPage() {
                   sx={{ flex: '1 1 240px' }}
                   placeholder="example: account_id"
                   required
+                  error={Boolean(getFieldNameErrorText(field.field_name))}
+                  helperText={
+                    getFieldNameErrorText(field.field_name) ||
+                    'Must match: /^[a-z][a-z0-9_]*$/ (lowercase snake_case)'
+                  }
                 />
 
                 <TextField
@@ -381,6 +395,21 @@ export function CustomEntitiesPage() {
               onChange={(event) => setNewFieldFormData((prev) => ({ ...prev, field_name: event.target.value }))}
               sx={{ flex: '1 1 260px' }}
               placeholder="example: external_id"
+              error={Boolean(
+                getFieldNameErrorText(newFieldFormData.field_name) ||
+                  getDuplicateFieldNameErrorText({
+                    fieldName: newFieldFormData.field_name,
+                    existingFields: activeEntity?.fields,
+                  }),
+              )}
+              helperText={
+                getFieldNameErrorText(newFieldFormData.field_name) ||
+                getDuplicateFieldNameErrorText({
+                  fieldName: newFieldFormData.field_name,
+                  existingFields: activeEntity?.fields,
+                }) ||
+                'Must match: /^[a-z][a-z0-9_]*$/ (example: account_id)'
+              }
             />
             <TextField
               select
@@ -408,7 +437,17 @@ export function CustomEntitiesPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              disabled={!activeEntity || !newFieldFormData.field_name.trim()}
+              disabled={
+                !activeEntity ||
+                !newFieldFormData.field_name.trim() ||
+                Boolean(getFieldNameErrorText(newFieldFormData.field_name)) ||
+                Boolean(
+                  getDuplicateFieldNameErrorText({
+                    fieldName: newFieldFormData.field_name,
+                    existingFields: activeEntity?.fields,
+                  }),
+                )
+              }
               onClick={() =>
                 void addFieldAndReload({
                   entityName: activeEntity?.entity_name,
@@ -511,6 +550,41 @@ function createEmptyField() {
     field_type: 'TEXT',
     is_required: false,
   }
+}
+
+/* Validate a field/column name using the same rules as the API (snake_case, lowercase). */
+function getFieldNameErrorText(fieldName) {
+  const normalized = String(fieldName || '').trim().toLowerCase()
+  if (!normalized) {
+    return ''
+  }
+
+  const reservedColumns = new Set(['id', 'created_at'])
+  if (reservedColumns.has(normalized)) {
+    return `Field name is reserved: ${normalized}`
+  }
+
+  if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
+    return 'Invalid format. Use: /^[a-z][a-z0-9_]*$/'
+  }
+
+  return ''
+}
+
+/* Ensure a new field name is not already defined on this object. */
+function getDuplicateFieldNameErrorText({ fieldName, existingFields }) {
+  const normalized = String(fieldName || '').trim().toLowerCase()
+  if (!normalized || !/^[a-z][a-z0-9_]*$/.test(normalized)) {
+    return ''
+  }
+
+  const list = Array.isArray(existingFields) ? existingFields : []
+  const exists = list.some((field) => String(field?.field_name || '').trim().toLowerCase() === normalized)
+  if (exists) {
+    return `Field already exists: ${normalized}`
+  }
+
+  return ''
 }
 
 /* Validate the entity name for format and uniqueness against existing entities. */

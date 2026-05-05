@@ -16,6 +16,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { alpha, useTheme } from '@mui/material/styles'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import ReactFlow, {
   Background,
@@ -34,10 +35,12 @@ const nodeTypes = {
 
 /* Visualize the schema relationships graph (classes + object properties). */
 export function GraphPage() {
+  const theme = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
   const focusRelationshipId = searchParams.get('focusRelationshipId')
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
+  const [selectedNodeId, setSelectedNodeId] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [reactFlowInstance, setReactFlowInstance] = useState(null)
@@ -59,6 +62,74 @@ export function GraphPage() {
     }
     return map
   }, [entities])
+
+  /* Ignore selection if the node no longer exists (e.g. after graph reload). */
+  const validSelectedNodeId = useMemo(() => {
+    if (!selectedNodeId) {
+      return null
+    }
+    const exists = nodes.some((node) => node.id === selectedNodeId)
+    return exists ? selectedNodeId : null
+  }, [selectedNodeId, nodes])
+
+  /* Entity names linked by a primary relationship edge to the selected node. */
+  const neighborIdsForSelection = useMemo(() => {
+    if (!validSelectedNodeId) {
+      return new Set()
+    }
+    const neighbors = new Set()
+    for (const edge of edges) {
+      if (edge.source === validSelectedNodeId) {
+        neighbors.add(edge.target)
+      }
+      if (edge.target === validSelectedNodeId) {
+        neighbors.add(edge.source)
+      }
+    }
+    return neighbors
+  }, [edges, validSelectedNodeId])
+
+  /* Nodes with highlight metadata for the custom node renderer. */
+  const nodesWithHighlight = useMemo(() => {
+    return nodes.map((node) => {
+      let highlightRole = null
+      if (validSelectedNodeId) {
+        if (node.id === validSelectedNodeId) {
+          highlightRole = 'selected'
+        } else if (neighborIdsForSelection.has(node.id)) {
+          highlightRole = 'neighbor'
+        }
+      }
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          highlightRole,
+        },
+      }
+    })
+  }, [nodes, validSelectedNodeId, neighborIdsForSelection])
+
+  /* Emphasize edges incident to the selected node (primary relationships). */
+  const edgesWithHighlight = useMemo(() => {
+    if (!validSelectedNodeId) {
+      return edges
+    }
+    const defaultStroke = theme.palette.divider
+    return edges.map((edge) => {
+      const incident =
+        edge.source === validSelectedNodeId || edge.target === validSelectedNodeId
+      return {
+        ...edge,
+        style: {
+          ...(edge.style || {}),
+          stroke: incident ? theme.palette.primary.main : defaultStroke,
+          strokeWidth: incident ? 3 : 1.5,
+        },
+        zIndex: incident ? 2 : 0,
+      }
+    })
+  }, [edges, validSelectedNodeId, theme.palette.divider, theme.palette.primary.main])
 
   useEffect(() => {
     void loadGraph({ setNodes, setEdges, setErrorMessage, setIsLoading })
@@ -135,19 +206,26 @@ export function GraphPage() {
       <Card variant="outlined">
         <CardContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Tip: drag a connection from one node to another to create a relationship. Click an edge to edit it.
+            Tip: drag a connection from one node to another to create a relationship. Click an edge to edit it. Click a
+            node to highlight it and any directly related entities; click the background to clear. Click the same node
+            again to deselect.
           </Typography>
           <Divider sx={{ mb: 2 }} />
 
           <Box sx={{ height: 560, width: '100%', borderRadius: 2, overflow: 'hidden' }}>
             <ReactFlow
-              nodes={nodes}
-              edges={edges}
+              nodes={nodesWithHighlight}
+              edges={edgesWithHighlight}
               nodeTypes={nodeTypes}
               fitView
               onInit={(instance) => setReactFlowInstance(instance)}
               onNodesChange={(changes) => setNodes((previousNodes) => applyNodeChanges(changes, previousNodes))}
               onEdgesChange={(changes) => setEdges((previousEdges) => applyEdgeChanges(changes, previousEdges))}
+              onNodeClick={(event, node) => {
+                event.stopPropagation()
+                setSelectedNodeId((previous) => (previous === node.id ? null : node.id))
+              }}
+              onPaneClick={() => setSelectedNodeId(null)}
               onConnect={(connection) =>
                 openCreateRelationshipDialogFromConnection({
                   connection,
@@ -440,18 +518,37 @@ async function loadGraph({ setNodes, setEdges, setErrorMessage, setIsLoading }) 
 /* Render an entity node with visible connection handles. */
 function CrmEntityNode({ data }) {
   const navigate = useNavigate()
+  const theme = useTheme()
+  const highlightRole = data?.highlightRole
+
+  const highlightStyles =
+    highlightRole === 'selected'
+      ? {
+          border: `2px solid ${theme.palette.primary.main}`,
+          bgcolor: alpha(theme.palette.primary.main, 0.12),
+          boxShadow: theme.shadows[6],
+        }
+      : highlightRole === 'neighbor'
+        ? {
+            border: `2px solid ${theme.palette.info.main}`,
+            bgcolor: alpha(theme.palette.info.main, 0.12),
+            boxShadow: theme.shadows[3],
+          }
+        : {
+            border: '1px solid',
+            borderColor: 'divider',
+            boxShadow: 1,
+          }
 
   return (
     <Box
       sx={{
         px: 1.25,
         py: 1,
-        bgcolor: 'background.paper',
-        border: '1px solid',
-        borderColor: 'divider',
+        bgcolor: highlightRole ? undefined : 'background.paper',
         borderRadius: 2,
         minWidth: 160,
-        boxShadow: 1,
+        ...highlightStyles,
       }}
     >
       <Handle
@@ -527,7 +624,7 @@ async function loadEntities({ setEntities }) {
   }
 }
 
-/* Render a relationship create/edit dialog. */
+/* Render a relationship create/edit dialog (link table is always created on the server). */
 function RelationshipDialog({
   isOpen,
   isLoading,
@@ -546,13 +643,15 @@ function RelationshipDialog({
   const entitiesForDropdown = Array.isArray(entities) ? entities : []
   const subjectColumns = entityColumns.get(formData.subject_entity) || ['id']
   const objectColumns = entityColumns.get(formData.object_entity) || ['id']
+  const hasLinkTableInForm = Boolean(String(formData.junction_entity || '').trim())
 
   return (
     <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>{editingRelationshipId ? 'Edit relationship' : 'Create relationship'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Define a relationship between two CRM entities. We will use your join keys to generate RDF links and an OWL ObjectProperty.
+          A link table is created automatically for each relationship (two integer columns for the from/to row ids). Edit
+          membership rows on the Relationships page. RDF and this graph use these links.
         </Typography>
 
         <TextField
@@ -591,6 +690,9 @@ function RelationshipDialog({
             }}
             sx={{ flex: '1 1 260px' }}
           >
+            <MenuItem value="">
+              <em>Select entity</em>
+            </MenuItem>
             {entitiesForDropdown.map((entity) => (
               <MenuItem key={entity.entity_name} value={entity.entity_name}>
                 {entity.display_name}
@@ -619,6 +721,9 @@ function RelationshipDialog({
             }}
             sx={{ flex: '1 1 260px' }}
           >
+            <MenuItem value="">
+              <em>Select entity</em>
+            </MenuItem>
             {entitiesForDropdown.map((entity) => (
               <MenuItem key={entity.entity_name} value={entity.entity_name}>
                 {entity.display_name}
@@ -631,10 +736,11 @@ function RelationshipDialog({
         <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap' }}>
           <TextField
             select
-            label={`From column (${formData.subject_entity})`}
+            label={`From column (${formData.subject_entity || 'subject'})`}
             value={formData.subject_column}
             onChange={(event) => setFormData((previous) => ({ ...previous, subject_column: event.target.value }))}
             sx={{ flex: '1 1 260px' }}
+            disabled={!formData.subject_entity}
           >
             {subjectColumns.map((columnName) => (
               <MenuItem key={columnName} value={columnName}>
@@ -644,10 +750,11 @@ function RelationshipDialog({
           </TextField>
           <TextField
             select
-            label={`To column (${formData.object_entity})`}
+            label={`To column (${formData.object_entity || 'object'})`}
             value={formData.object_column}
             onChange={(event) => setFormData((previous) => ({ ...previous, object_column: event.target.value }))}
             sx={{ flex: '1 1 260px' }}
+            disabled={!formData.object_entity}
           >
             {objectColumns.map((columnName) => (
               <MenuItem key={columnName} value={columnName}>
@@ -656,6 +763,25 @@ function RelationshipDialog({
             ))}
           </TextField>
         </Box>
+
+        <Typography variant="body2" color="text.secondary">
+          Link table columns store values that match <b>{formData.subject_entity || 'from'}</b>.
+          {formData.subject_column || 'id'} and <b>{formData.object_entity || 'to'}</b>.
+          {formData.object_column || 'id'}.
+        </Typography>
+
+        {hasLinkTableInForm ? (
+          <Typography variant="body2">
+            Link table: <b>{formData.junction_entity}</b> — <b>{formData.junction_subject_column}</b>,{' '}
+            <b>{formData.junction_object_column}</b>. Add rows from Relationships (link icon).
+          </Typography>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            {editingRelationshipId
+              ? 'Saving creates a link table if this edge did not have one yet.'
+              : 'Saving creates a link table from the relationship name and entities (hidden from Objects).'}
+          </Typography>
+        )}
 
         <FormControlLabel
           control={<Switch checked={showAdvancedFields} onChange={(event) => setShowAdvancedFields(event.target.checked)} />}
@@ -686,7 +812,11 @@ function RelationshipDialog({
         <Button onClick={onClose} color="inherit">
           Cancel
         </Button>
-        <Button onClick={onSave} variant="contained" disabled={isLoading}>
+        <Button
+          onClick={onSave}
+          variant="contained"
+          disabled={isLoading || !canSaveRelationshipForm(formData)}
+        >
           Save relationship
         </Button>
       </DialogActions>
@@ -698,11 +828,14 @@ function RelationshipDialog({
 function createEmptyRelationshipForm() {
   return {
     relationship_name: '',
-    subject_entity: 'accounts',
+    subject_entity: '',
     subject_column: 'id',
     predicate_iri: '',
-    object_entity: 'contacts',
-    object_column: 'account_id',
+    object_entity: '',
+    object_column: 'id',
+    junction_entity: '',
+    junction_subject_column: '',
+    junction_object_column: '',
   }
 }
 
@@ -727,11 +860,14 @@ function openCreateRelationshipDialogFromConnection({
   setShowAdvancedFields(false)
   setRelationshipFormData({
     relationship_name: relationshipName,
-    subject_entity: subjectEntity || 'accounts',
+    subject_entity: subjectEntity || '',
     subject_column: suggestions.subject_column,
     predicate_iri: predicateIri,
-    object_entity: objectEntity || 'contacts',
+    object_entity: objectEntity || '',
     object_column: suggestions.object_column,
+    junction_entity: '',
+    junction_subject_column: '',
+    junction_object_column: '',
   })
   setIsDialogOpen(true)
 }
@@ -750,11 +886,14 @@ function openEditRelationshipDialogFromEdge({
 
   setRelationshipFormData({
     relationship_name: edge?.data?.relationship_name || edge?.label || '',
-    subject_entity: edge?.data?.subject_entity || edge?.source || 'accounts',
+    subject_entity: edge?.data?.subject_entity || edge?.source || '',
     subject_column: edge?.data?.subject_column || 'id',
     predicate_iri: edge?.data?.predicate_iri || '',
-    object_entity: edge?.data?.object_entity || edge?.target || 'contacts',
+    object_entity: edge?.data?.object_entity || edge?.target || '',
     object_column: edge?.data?.object_column || 'id',
+    junction_entity: edge?.data?.junction_entity || '',
+    junction_subject_column: edge?.data?.junction_subject_column || '',
+    junction_object_column: edge?.data?.junction_object_column || '',
   })
 
   setIsDialogOpen(true)
@@ -838,10 +977,9 @@ async function deleteRelationshipAndReloadGraph({
   }
 }
 
-/* Normalize relationship data before sending to backend. */
+/* Normalize relationship data before sending to backend (link table is server-managed). */
 function normalizeRelationshipPayload(formData) {
   const safeFormData = formData && typeof formData === 'object' ? formData : {}
-
   return {
     relationship_name: String(safeFormData.relationship_name || '').trim(),
     subject_entity: String(safeFormData.subject_entity || '').trim(),
@@ -850,6 +988,19 @@ function normalizeRelationshipPayload(formData) {
     object_entity: String(safeFormData.object_entity || '').trim(),
     object_column: String(safeFormData.object_column || '').trim(),
   }
+}
+
+/* Whether the relationship dialog has enough information to save. */
+function canSaveRelationshipForm(formData) {
+  const safeFormData = formData && typeof formData === 'object' ? formData : {}
+  return Boolean(
+    String(safeFormData.relationship_name || '').trim() &&
+      String(safeFormData.subject_entity || '').trim() &&
+      String(safeFormData.object_entity || '').trim() &&
+      String(safeFormData.subject_column || '').trim() &&
+      String(safeFormData.object_column || '').trim() &&
+      String(safeFormData.predicate_iri || '').trim(),
+  )
 }
 
 /* Suggest join keys based on common CRM FK patterns. */
