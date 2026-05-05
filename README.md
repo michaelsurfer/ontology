@@ -1,42 +1,84 @@
-# Ontology Platform (CRM → OWL/RDF)
+# Ontology Platform
 
-This MVP provides:
+This repo is an ontology / context-layer MVP: custom entities in SQLite, OWL-style mappings, relationships (including SQL link tables), RDF Turtle export, SHACL rules, and **Query Studio** (natural language → SPARQL → results).
 
-- CRM tables and CRUD UI: Accounts, Contacts, Opportunities, Activities, Products, Orders, Order items
-- A relationship designer (table-to-table join rules)
-- RDF/OWL export as Turtle
-- A schema relationship graph view
+## Architecture (high level)
+
+- **Node backend** (`backend/`): Express API, SQLite, RDF export (`createRdfTurtleExport`), schema graph for the UI, AI chat / planning. After writes that affect the graph, it **refreshes** the Rust cache (best effort).
+- **Rust service** (`rdf-cache-service/`): In-memory Turtle cache plus **SPARQL SELECT** via **Oxigraph**. The backend’s `/api/sparql` and AI SPARQL path call this service.
+- **React frontend** (`frontend/`): Objects, relationships, mappings, rules, graph view, Query Studio.
+
+The **context map** (schema graph) is served from the Node API (`GET /api/graph/schema`) and does **not** require Rust. **SPARQL / Query Studio** expects the Rust service to be running.
 
 ## Run locally
 
-In one terminal:
+### 1. Backend (required)
 
 ```bash
 cd backend
+npm install
 npm run dev
 ```
 
-In another terminal:
+API: `http://localhost:5174`  
+SQLite: `backend/data/ontology-platform.sqlite` (gitignored local DB).
+
+### 2. Rust RDF + SPARQL service (required for SPARQL / Query Studio)
+
+Install [Rust](https://rustup.rs/), then:
+
+```bash
+cd rdf-cache-service
+cp .env.example .env   # optional; defaults shown inside
+cargo run
+```
+
+Default listen address: `http://127.0.0.1:8181`
+
+Endpoints include:
+
+- `GET /health`
+- `POST /cache/load` — push Turtle (`replace: true` overwrites cache)
+- `GET /cache/get`, `GET /cache/meta`, `POST /cache/clear`
+- `POST /sparql/query` — body `{ "query": "SELECT ..." }`
+
+### 3. Frontend
 
 ```bash
 cd frontend
-npm run dev
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Then open `http://127.0.0.1:5173/`.
+Open `http://127.0.0.1:5173/`. The dev server proxies `/api/*` to `http://localhost:5174`.
 
-## Notes
+### Environment (backend)
 
-- The backend uses SQLite at `backend/data/ontology-platform.sqlite`.
-- The frontend proxies `/api/*` to the backend at `http://localhost:5174`.
+| Variable | Purpose |
+|----------|---------|
+| `RDF_CACHE_URL` | Base URL of the Rust service (default `http://127.0.0.1:8181`). |
+
+### Environment (Rust service)
+
+See `rdf-cache-service/.env.example` (`RDF_CACHE_HOST`, `RDF_CACHE_PORT`, `RUST_LOG`).
+
+## Monorepo scripts (optional)
+
+From repo root:
+
+```bash
+npm install
+npm run dev:backend    # backend only
+npm run dev:frontend   # frontend only
+```
 
 ## OntoX SDK / CLI (local)
 
-This repo includes a minimal SDK + CLI scaffold under `packages/`:
+Scaffold under `packages/`:
 
-- `packages/ontox-js`: JavaScript SDK (import `OntoXClient`)
-- `packages/ontox-cli`: CLI (binary: `ontox`)
-- `packages/ontox-py`: Python SDK (import `OntoXClient`)
+- `packages/ontox-js` — JavaScript SDK (`OntoXClient`)
+- `packages/ontox-cli` — CLI (`ontox`)
+- `packages/ontox-py` — Python SDK
 
 ### JS (Node) quick start
 
@@ -59,4 +101,3 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e packages/ontox-py
 python -c "from ontox import OntoXClient; print(OntoXClient(base_url='http://localhost:5174').entities.list())"
 ```
-
