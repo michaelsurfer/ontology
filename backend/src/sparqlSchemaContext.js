@@ -96,6 +96,38 @@ function relationshipHasLinkTable(relationship) {
   )
 }
 
+/* Build example SPARQL for subclass hierarchy (RDFS is not inferred — queries must traverse rdfs:subClassOf). */
+function buildSubclassSparqlFragments({ childClassIri, parentClassIri }) {
+  const child = String(childClassIri || '').trim()
+  const parent = String(parentClassIri || '').trim()
+  if (!child || !parent) {
+    return null
+  }
+  return {
+    select_confirm_child_subclass_of_parent: [
+      'SELECT ?childClass ?parentClass WHERE {',
+      `  BIND(<${child}> AS ?childClass)`,
+      `  BIND(<${parent}> AS ?parentClass)`,
+      '  ?childClass rdfs:subClassOf+ ?parentClass .',
+      '}',
+      'LIMIT 5',
+    ].join('\n'),
+    select_instances_typed_child_only: [
+      'SELECT ?individual WHERE {',
+      `  ?individual rdf:type <${child}> .`,
+      '}',
+      'LIMIT 50',
+    ].join('\n'),
+    select_instances_under_parent_including_subclasses: [
+      'SELECT ?individual ?typeClass WHERE {',
+      '  ?individual rdf:type ?typeClass .',
+      `  ?typeClass rdfs:subClassOf* <${parent}> .`,
+      '}',
+      'LIMIT 50',
+    ].join('\n'),
+  }
+}
+
 /* Add SPARQL-oriented hints: link tables are flattened to direct object-property triples in RDF. */
 export function enrichSchemaContextForSparql(schemaContext) {
   if (!schemaContext || typeof schemaContext !== 'object') {
@@ -105,6 +137,41 @@ export function enrichSchemaContextForSparql(schemaContext) {
   const relationships = Array.isArray(schemaContext.relationships) ? schemaContext.relationships : []
   const classIriByEntityName = buildClassIriByEntityName(schemaContext)
   const readablePropertyIrisByEntityName = buildReadablePropertyHintsByEntityName(schemaContext)
+
+  const entityMappingsForSubclass = Array.isArray(schemaContext.entityMappings) ? schemaContext.entityMappings : []
+  const sparqlSubclassHints = entityMappingsForSubclass
+    .map((entityMapping) => {
+      if (!entityMapping || typeof entityMapping !== 'object') {
+        return null
+      }
+      const childEntity = String(entityMapping.entity_name || '').trim()
+      const parentEntity = entityMapping.parent_entity_name
+        ? String(entityMapping.parent_entity_name || '').trim()
+        : ''
+      if (!childEntity || !parentEntity) {
+        return null
+      }
+      const childClassIri = classIriByEntityName.get(childEntity) || ''
+      const parentClassIri = classIriByEntityName.get(parentEntity) || ''
+      if (!childClassIri || !parentClassIri) {
+        return null
+      }
+      const sparqlFragments = buildSubclassSparqlFragments({
+        childClassIri,
+        parentClassIri,
+      })
+      return {
+        child_entity: childEntity,
+        parent_entity: parentEntity,
+        child_class_iri: childClassIri,
+        parent_class_iri: parentClassIri,
+        rdf_pattern: `<${childClassIri}> rdfs:subClassOf <${parentClassIri}> .`,
+        query_note:
+          'Individuals use rdf:type with the child class IRI only. Filtering ?x rdf:type <parent_class_iri> misses subclass instances; use ?x rdf:type ?c . ?c rdfs:subClassOf* <parent_class_iri> . instead.',
+        sparql_fragments: sparqlFragments,
+      }
+    })
+    .filter(Boolean)
 
   const sparqlRelationshipHints = relationships.map((rel) => {
     const hasLink = relationshipHasLinkTable(rel)
@@ -153,14 +220,35 @@ export function enrichSchemaContextForSparql(schemaContext) {
     }
   })
 
+  const subclassNotes =
+    sparqlSubclassHints.length > 0
+      ? [
+          'Class hierarchy is in sparqlSubclassHints (rdfs:subClassOf between class IRIs). It is NOT in sparqlRelationshipHints.',
+          'Individuals are typed with rdf:type using the child (leaf) class IRI only. The SPARQL engine does not infer types for parents.',
+          'To list everyone under a parent class, use sparql_fragments.select_instances_under_parent_including_subclasses or an equivalent ?typeClass rdfs:subClassOf* <parent_class_iri> pattern.',
+        ]
+      : []
+
+  const listAllSubclassEdgesSparql = [
+    'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>',
+    'SELECT ?childClass ?parentClass WHERE {',
+    '  ?childClass rdfs:subClassOf ?parentClass .',
+    '}',
+    'LIMIT 50',
+  ].join('\n')
+
   return {
     ...schemaContext,
+    sparql_list_all_subclass_edges: listAllSubclassEdgesSparql,
     sparqlGraphModelNotes: [
+      ...subclassNotes,
+      'The SPARQL endpoint supports SELECT only (no ASK). To list every subclass edge in the graph, use sparql_list_all_subclass_edges.',
       'SQL link tables store pairwise keys; the RDF export materializes them as simple triples: subjectIndividual predicate_iri objectIndividual.',
       'Do not introduce a variable for a "link row" or link table class — those rows are not exported as typed nodes.',
       'For any question about links between two entity tables, locate the matching sparqlRelationshipHints row (subject_entity + object_entity) and reuse predicate_iri, domain_class_iri, and range_class_iri exactly. Start from copy_ready_sparql_fragment when present.',
       'Legacy relationships without junction_entity still use a direct SQL join in the export; the same SPARQL pattern applies.',
     ],
+    sparqlSubclassHints,
     sparqlRelationshipHints,
   }
 }

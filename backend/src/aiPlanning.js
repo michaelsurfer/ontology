@@ -212,7 +212,8 @@ async function requestPlannerDecision({ openAiClient, model, plannerPayload }) {
     },
   ]
 
-  return tryChatJson({ openAiClient, model, messages })
+  const { parsed } = await tryChatJson({ openAiClient, model, messages })
+  return parsed
 }
 
 /* After hitting the iteration cap, ask once more for a complete plan using gathered rows. */
@@ -230,7 +231,8 @@ async function forceCompletePlan({ openAiClient, model, userGoal, trace }) {
     },
   ]
 
-  const parsed = normalizePlannerDecisionAction(await tryChatJson({ openAiClient, model, messages }))
+  const { parsed: rawParsed } = await tryChatJson({ openAiClient, model, messages })
+  const parsed = normalizePlannerDecisionAction(rawParsed)
   if (parsed && parsed.action === 'complete') {
     return {
       planText: String(parsed.plan || '').trim() || '(empty plan)',

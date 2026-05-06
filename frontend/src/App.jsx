@@ -1,9 +1,10 @@
-import React from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import React, { useMemo } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material'
 
 import './App.css'
 import { AppShell } from './components/AppShell'
+import { ColorModeProvider, useColorMode } from './theme/ColorModeContext'
 import { HomePage } from './pages/HomePage'
 import { RelationshipsPage } from './pages/RelationshipsPage'
 import { GraphPage } from './pages/GraphPage'
@@ -22,19 +23,24 @@ import { AiPlanningPage } from './pages/AiPlanningPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { IntegrationsPage } from './pages/IntegrationsPage'
 
-const appTheme = createTheme({
-  palette: {
-    mode: 'light',
-  },
-  shape: {
-    borderRadius: 12,
-  },
-})
+/* Inner tree: theme follows color mode from context. */
+function ThemedRoutes() {
+  const { colorMode } = useColorMode()
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: colorMode,
+        },
+        shape: {
+          borderRadius: 12,
+        },
+      }),
+    [colorMode],
+  )
 
-/* Root component that defines theme and routes. */
-function App() {
   return (
-    <ThemeProvider theme={appTheme}>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
         <Routes>
@@ -60,6 +66,15 @@ function App() {
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
+  )
+}
+
+/* Root component: color mode provider wraps MUI theme and routes. */
+function App() {
+  return (
+    <ColorModeProvider>
+      <ThemedRoutes />
+    </ColorModeProvider>
   )
 }
 

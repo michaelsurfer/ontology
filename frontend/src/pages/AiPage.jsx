@@ -126,6 +126,8 @@ export function AiPage() {
       const data = response.data || {}
       const rulesValidationFromResponse =
         data.rulesValidation && typeof data.rulesValidation === 'object' ? data.rulesValidation : null
+      const tokenUsageFromResponse =
+        data.tokenUsage && typeof data.tokenUsage === 'object' ? data.tokenUsage : null
 
       setMessages((previous) => [
         ...previous,
@@ -139,6 +141,7 @@ export function AiPage() {
           executionTimeMs: Number.isFinite(data.executionTimeMs) ? Number(data.executionTimeMs) : null,
           enabledRulesCount: Number.isFinite(data.enabledRulesCount) ? Number(data.enabledRulesCount) : null,
           rulesValidation: rulesValidationFromResponse,
+          tokenUsage: tokenUsageFromResponse,
           createdAtMs: Date.now(),
         },
       ])
@@ -212,10 +215,14 @@ export function AiPage() {
                   multiline
                   minRows={2}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                      event.preventDefault()
-                      void sendMessage()
+                    if (event.key !== 'Enter') {
+                      return
                     }
+                    if (event.shiftKey) {
+                      return
+                    }
+                    event.preventDefault()
+                    void sendMessage()
                   }}
                 />
                 <Button variant="contained" onClick={() => void sendMessage()} disabled={isLoading}>
@@ -224,7 +231,7 @@ export function AiPage() {
               </Box>
 
               <Typography variant="caption" color="text.secondary">
-                Tip: Press Ctrl+Enter (or Cmd+Enter) to send.
+                Tip: Press Enter to send. Use Shift+Enter for a new line.
               </Typography>
 
               <FormControlLabel
@@ -283,6 +290,13 @@ function ChatMessageBubble({ message }) {
       ? null
       : Number(message.enabledRulesCount)
   const rulesValidation = message?.rulesValidation && typeof message.rulesValidation === 'object' ? message.rulesValidation : null
+  const tokenUsage = message?.tokenUsage && typeof message.tokenUsage === 'object' ? message.tokenUsage : null
+  const hasTokenUsage =
+    tokenUsage &&
+    (Number.isFinite(Number(tokenUsage.totalTokens)) ||
+      Number.isFinite(Number(tokenUsage.promptTokens)) ||
+      Number.isFinite(Number(tokenUsage.completionTokens)))
+  const totalAiTokens = hasTokenUsage ? Number(tokenUsage.totalTokens) || 0 : null
 
   return (
     <Box
@@ -320,6 +334,18 @@ function ChatMessageBubble({ message }) {
                 size="small"
                 variant="outlined"
                 label={rulesValidation.conforms ? 'Conforms' : 'Violations'}
+              />
+            ) : null}
+            {!isUser && hasTokenUsage ? (
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`AI tokens: ${totalAiTokens}`}
+                title={
+                  tokenUsage
+                    ? `prompt ${tokenUsage.promptTokens ?? 0} + completion ${tokenUsage.completionTokens ?? 0} (total ${tokenUsage.totalTokens ?? totalAiTokens})`
+                    : undefined
+                }
               />
             ) : null}
           </Box>

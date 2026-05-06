@@ -94,6 +94,7 @@ function addOntologyTriples(writer, { baseIri, entityMappings, propertyMappings,
   const rdfsDomain = namedNode('http://www.w3.org/2000/01/rdf-schema#domain')
   const rdfsRange = namedNode('http://www.w3.org/2000/01/rdf-schema#range')
   const rdfsLabel = namedNode('http://www.w3.org/2000/01/rdf-schema#label')
+  const rdfsSubClassOf = namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf')
 
   writer.addQuad(quad(namedNode(baseIri), rdfType, owlOntology))
 
@@ -106,6 +107,15 @@ function addOntologyTriples(writer, { baseIri, entityMappings, propertyMappings,
     writer.addQuad(
       quad(namedNode(entityMapping.class_iri), rdfsLabel, literal(humanizeName(entityMapping.entity_name))),
     )
+    const parentEntityName = entityMapping.parent_entity_name
+      ? String(entityMapping.parent_entity_name || '').trim()
+      : ''
+    if (parentEntityName) {
+      const parentClassIri = classIriByEntityName.get(parentEntityName)
+      if (parentClassIri) {
+        writer.addQuad(quad(namedNode(entityMapping.class_iri), rdfsSubClassOf, namedNode(parentClassIri)))
+      }
+    }
   }
 
   for (const propertyMapping of propertyMappings) {

@@ -51,6 +51,14 @@ export function createCustomEntitiesResource({ httpClient }) {
         },
       })
     },
+
+    /* Delete a field (drops SQL column and related mappings; cannot remove the last field). */
+    async deleteField({ entityName, fieldId }) {
+      return await httpClient.requestJson({
+        method: 'DELETE',
+        path: `/api/custom-entities/${encodeURIComponent(entityName)}/fields/${encodeURIComponent(fieldId)}`,
+      })
+    },
   }
 }
 

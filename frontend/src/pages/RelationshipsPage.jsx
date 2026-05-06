@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -440,6 +441,144 @@ function RelationshipDialog({
   )
 }
 
+/* Pick a human-readable column to show next to each row id in link-table FK pickers. */
+function resolveLabelColumnNameForEntity(entityMeta) {
+  if (!entityMeta || !Array.isArray(entityMeta.fields)) {
+    return null
+  }
+  const allFields = entityMeta.fields.filter((field) => field && field.field_name)
+  const activeFields = allFields.filter((field) => Number(field.is_active ?? 1) === 1)
+  const candidates = activeFields.length > 0 ? activeFields : allFields
+  const names = candidates.map((field) => field.field_name)
+  if (names.includes('name')) {
+    return 'name'
+  }
+  if (names.includes('title')) {
+    return 'title'
+  }
+  const textField = candidates.find((field) => String(field.field_type || '').toUpperCase() === 'TEXT')
+  if (textField) {
+    return textField.field_name
+  }
+  return null
+}
+
+/* Build sorted { id, label } options for a foreign-key dropdown from table rows. */
+function buildForeignKeyPickOptionsFromRows({ rows, idColumn, labelColumn }) {
+  const options = []
+  for (const row of rows) {
+    if (!row || row[idColumn] === undefined || row[idColumn] === null) {
+      continue
+    }
+    const id = row[idColumn]
+    let label = ''
+    if (
+      labelColumn &&
+      row[labelColumn] !== undefined &&
+      row[labelColumn] !== null &&
+      String(row[labelColumn]).trim() !== ''
+    ) {
+      label = String(row[labelColumn])
+    } else {
+      label = `Row ${id}`
+    }
+    options.push({ id, label })
+  }
+  options.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: 'base' }))
+  return options
+}
+
+/* Parse what the user typed or the chip label into a stored id (supports "Name (id 12)" from the menu). */
+function parseManualForeignKeyInput(displayString) {
+  const trimmed = String(displayString || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+  const match = trimmed.match(/\(id\s+([^)]+)\)\s*$/i)
+  if (match) {
+    return String(match[1]).trim()
+  }
+  return trimmed
+}
+
+/* One junction column that points at another entity: autocomplete by label, or type the id. */
+function LinkTableForeignKeyField({
+  field,
+  entityName,
+  idColumn,
+  options,
+  isLoading,
+  rowFormData,
+  setRowFormData,
+}) {
+  const fieldName = field.field_name
+  const rawValue = rowFormData[fieldName] ?? ''
+  const matchedOption = options.find((option) => String(option.id) === String(rawValue)) || null
+  const autocompleteValue =
+    matchedOption ?? (rawValue === '' || rawValue === undefined || rawValue === null ? null : String(rawValue))
+
+  return (
+    <Autocomplete
+      freeSolo
+      loading={isLoading}
+      options={options}
+      getOptionLabel={(option) => {
+        if (typeof option === 'string') {
+          return option
+        }
+        if (!option || option.id === undefined || option.id === null) {
+          return ''
+        }
+        const labelPart =
+          option.label && String(option.label).trim() ? String(option.label) : `id ${option.id}`
+        return `${labelPart} (id ${option.id})`
+      }}
+      isOptionEqualToValue={(option, value) => {
+        if (value && typeof value === 'object' && value.id !== undefined && value.id !== null) {
+          return String(option.id) === String(value.id)
+        }
+        if (typeof value === 'string') {
+          return String(option.id) === value
+        }
+        return false
+      }}
+      value={autocompleteValue}
+      onChange={(event, newValue) => {
+        if (newValue === null || newValue === undefined) {
+          setRowFormData((previous) => ({ ...previous, [fieldName]: '' }))
+          return
+        }
+        if (typeof newValue === 'string') {
+          setRowFormData((previous) => ({ ...previous, [fieldName]: newValue.trim() }))
+          return
+        }
+        setRowFormData((previous) => ({ ...previous, [fieldName]: String(newValue.id) }))
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label={`${fieldName} → ${entityName}.${idColumn}`}
+          helperText={
+            isLoading
+              ? 'Loading rows from related table…'
+              : `Pick a row by name or type ${idColumn} manually.`
+          }
+          required={Boolean(field.is_required)}
+          onBlur={(blurEvent) => {
+            if (typeof params.onBlur === 'function') {
+              params.onBlur(blurEvent)
+            }
+            const parsed = parseManualForeignKeyInput(blurEvent.target.value)
+            if (parsed !== String(rawValue ?? '')) {
+              setRowFormData((previous) => ({ ...previous, [fieldName]: parsed }))
+            }
+          }}
+        />
+      )}
+    />
+  )
+}
+
 /* Dialog to view and edit rows in a relationship's junction (link) table without leaving Relationships. */
 function JunctionLinkDataDialog({ relationship, onClose }) {
   const junctionEntityName =
@@ -454,6 +593,9 @@ function JunctionLinkDataDialog({ relationship, onClose }) {
   const [isRowDialogOpen, setIsRowDialogOpen] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
   const [rowFormData, setRowFormData] = useState({})
+  const [subjectRowPickOptions, setSubjectRowPickOptions] = useState([])
+  const [objectRowPickOptions, setObjectRowPickOptions] = useState([])
+  const [isForeignKeyPickListsLoading, setIsForeignKeyPickListsLoading] = useState(false)
 
   /* Prefer active fields; tolerate string/number is_active from API; never hide all columns for link tables. */
   const fields = useMemo(() => {
@@ -484,6 +626,76 @@ function JunctionLinkDataDialog({ relationship, onClose }) {
       setIsLoading,
     })
   }, [relationship, junctionEntityName])
+
+  useEffect(() => {
+    if (!relationship || !relationship.subject_entity || !relationship.object_entity) {
+      setSubjectRowPickOptions([])
+      setObjectRowPickOptions([])
+      setIsForeignKeyPickListsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setIsForeignKeyPickListsLoading(true)
+
+    async function loadForeignKeyPickLists() {
+      const subjectEntityName = String(relationship.subject_entity)
+      const objectEntityName = String(relationship.object_entity)
+      const subjectIdColumn = String(relationship.subject_column || 'id')
+      const objectIdColumn = String(relationship.object_column || 'id')
+
+      try {
+        const [subjectMetaResponse, objectMetaResponse, subjectRowsResponse, objectRowsResponse] = await Promise.all([
+          apiClient.get(`/custom-entities/${encodeURIComponent(subjectEntityName)}`),
+          apiClient.get(`/custom-entities/${encodeURIComponent(objectEntityName)}`),
+          apiClient.get(`/custom/${encodeURIComponent(subjectEntityName)}`),
+          apiClient.get(`/custom/${encodeURIComponent(objectEntityName)}`),
+        ])
+
+        if (cancelled) {
+          return
+        }
+
+        const subjectLabelColumn = resolveLabelColumnNameForEntity(subjectMetaResponse.data)
+        const objectLabelColumn = resolveLabelColumnNameForEntity(objectMetaResponse.data)
+
+        setSubjectRowPickOptions(
+          buildForeignKeyPickOptionsFromRows({
+            rows: Array.isArray(subjectRowsResponse.data) ? subjectRowsResponse.data : [],
+            idColumn: subjectIdColumn,
+            labelColumn: subjectLabelColumn,
+          }),
+        )
+        setObjectRowPickOptions(
+          buildForeignKeyPickOptionsFromRows({
+            rows: Array.isArray(objectRowsResponse.data) ? objectRowsResponse.data : [],
+            idColumn: objectIdColumn,
+            labelColumn: objectLabelColumn,
+          }),
+        )
+      } catch (loadError) {
+        if (!cancelled) {
+          setSubjectRowPickOptions([])
+          setObjectRowPickOptions([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsForeignKeyPickListsLoading(false)
+        }
+      }
+    }
+
+    void loadForeignKeyPickLists()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    relationship?.subject_entity,
+    relationship?.object_entity,
+    relationship?.subject_column,
+    relationship?.object_column,
+  ])
 
   const isMainDialogOpen = Boolean(relationship && junctionEntityName)
 
@@ -644,20 +856,50 @@ function JunctionLinkDataDialog({ relationship, onClose }) {
             disabled
             helperText="System field (auto-increment integer)"
           />
-          {fields.map((field) => (
-            <TextField
-              key={field.field_name}
-              label={field.field_name}
-              value={rowFormData[field.field_name] ?? ''}
-              onChange={(event) =>
-                setRowFormData((previous) => ({
-                  ...previous,
-                  [field.field_name]: event.target.value,
-                }))
-              }
-              required={Boolean(field.is_required)}
-            />
-          ))}
+          {fields.map((field) => {
+            if (field.field_name === relationship.junction_subject_column) {
+              return (
+                <LinkTableForeignKeyField
+                  key={field.field_name}
+                  field={field}
+                  entityName={relationship.subject_entity}
+                  idColumn={relationship.subject_column || 'id'}
+                  options={subjectRowPickOptions}
+                  isLoading={isForeignKeyPickListsLoading}
+                  rowFormData={rowFormData}
+                  setRowFormData={setRowFormData}
+                />
+              )
+            }
+            if (field.field_name === relationship.junction_object_column) {
+              return (
+                <LinkTableForeignKeyField
+                  key={field.field_name}
+                  field={field}
+                  entityName={relationship.object_entity}
+                  idColumn={relationship.object_column || 'id'}
+                  options={objectRowPickOptions}
+                  isLoading={isForeignKeyPickListsLoading}
+                  rowFormData={rowFormData}
+                  setRowFormData={setRowFormData}
+                />
+              )
+            }
+            return (
+              <TextField
+                key={field.field_name}
+                label={field.field_name}
+                value={rowFormData[field.field_name] ?? ''}
+                onChange={(event) =>
+                  setRowFormData((previous) => ({
+                    ...previous,
+                    [field.field_name]: event.target.value,
+                  }))
+                }
+                required={Boolean(field.is_required)}
+              />
+            )
+          })}
           <Divider />
           <Typography variant="caption" color="text.secondary">
             {relationship.junction_subject_column}: {relationship.subject_entity} id; {relationship.junction_object_column}:{' '}

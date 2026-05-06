@@ -322,6 +322,79 @@ export function updateCustomEntityField({ entity_name, field_id, is_required, is
   return transaction()
 }
 
+/* Delete a field from a custom entity: drops the SQL column (row values removed), mappings, related rules, and relationships that referenced this column. */
+export function deleteCustomEntityField({ entity_name, field_id }) {
+  const database = getDatabase()
+  const entity = getCustomEntityByName(entity_name)
+  if (!entity) {
+    throw new Error('Custom entity not found')
+  }
+
+  const linkMetaRow = database.prepare('SELECT is_link_table FROM custom_entities WHERE id = ?').get(entity.id)
+  if (linkMetaRow && Number(linkMetaRow.is_link_table || 0)) {
+    throw new Error('Cannot delete fields from automated link tables.')
+  }
+
+  const field = database
+    .prepare('SELECT * FROM custom_entity_fields WHERE id = ? AND custom_entity_id = ?')
+    .get(Number(field_id), entity.id)
+
+  if (!field) {
+    throw new Error('Field not found')
+  }
+
+  const remainingFieldCount = entity.fields.filter((existingField) => existingField.id !== Number(field_id)).length
+  if (remainingFieldCount === 0) {
+    throw new Error('Cannot delete the last field. Add another field first, or delete the entity.')
+  }
+
+  const mappingRow = database
+    .prepare('SELECT property_iri FROM property_mappings WHERE entity_name = ? AND column_name = ?')
+    .get(entity.entity_name, field.field_name)
+
+  const transaction = database.transaction(() => {
+    const relationshipRows = database
+      .prepare(
+        `
+        SELECT id, junction_entity, junction_auto_created
+        FROM relationship_definitions
+        WHERE (subject_entity = ? AND subject_column = ?)
+           OR (object_entity = ? AND object_column = ?)
+      `,
+      )
+      .all(entity.entity_name, field.field_name, entity.entity_name, field.field_name)
+
+    for (const relationshipRow of relationshipRows) {
+      database.prepare('DELETE FROM relationship_definitions WHERE id = ?').run(relationshipRow.id)
+      if (Number(relationshipRow.junction_auto_created || 0) === 1 && String(relationshipRow.junction_entity || '').trim()) {
+        try {
+          deleteAutomatedLinkTableOnly({ entity_name: relationshipRow.junction_entity })
+        } catch (error) {
+          /* Link table may already be missing. */
+        }
+      }
+    }
+
+    if (mappingRow && mappingRow.property_iri) {
+      database
+        .prepare('DELETE FROM ontology_rules WHERE target_entity = ? AND property_iri = ?')
+        .run(entity.entity_name, mappingRow.property_iri)
+    }
+
+    database
+      .prepare('DELETE FROM property_mappings WHERE entity_name = ? AND column_name = ?')
+      .run(entity.entity_name, field.field_name)
+
+    database.prepare('DELETE FROM custom_entity_fields WHERE id = ?').run(Number(field_id))
+
+    database.exec(`ALTER TABLE "${entity.entity_name}" DROP COLUMN "${field.field_name}"`)
+
+    return getCustomEntityByName(entity.entity_name)
+  })
+
+  return transaction()
+}
+
 /* Delete a custom entity (drops SQL table and removes metadata/mappings). */
 export function deleteCustomEntity({ entity_name }) {
   const database = getDatabase()

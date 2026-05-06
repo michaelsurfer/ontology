@@ -5,7 +5,7 @@ export function getSchemaGraph() {
   const database = getDatabase()
 
   const entityMappings = database
-    .prepare('SELECT entity_name, class_iri FROM entity_mappings ORDER BY entity_name ASC')
+    .prepare('SELECT entity_name, class_iri, parent_entity_name FROM entity_mappings ORDER BY entity_name ASC')
     .all()
 
   const relationshipDefinitions = database
@@ -27,7 +27,7 @@ export function getSchemaGraph() {
     },
   }))
 
-  const edges = relationshipDefinitions.map((relationshipDefinition) => {
+  const relationshipEdges = relationshipDefinitions.map((relationshipDefinition) => {
     const usesJunction = Boolean(
       String(relationshipDefinition.junction_entity || '').trim() &&
         String(relationshipDefinition.junction_subject_column || '').trim() &&
@@ -55,6 +55,30 @@ export function getSchemaGraph() {
       animated: false,
     }
   })
+
+  const subclassEdges = entityMappings
+    .map((entityMapping) => {
+      const parentName = entityMapping.parent_entity_name
+        ? String(entityMapping.parent_entity_name || '').trim()
+        : ''
+      if (!parentName) {
+        return null
+      }
+      return {
+        id: `subclass-${entityMapping.entity_name}`,
+        source: entityMapping.entity_name,
+        target: parentName,
+        label: 'rdfs:subClassOf',
+        data: {
+          edge_kind: 'subclass',
+        },
+        animated: false,
+        style: { strokeDasharray: '6 4' },
+      }
+    })
+    .filter(Boolean)
+
+  const edges = [...subclassEdges, ...relationshipEdges]
 
   return { nodes, edges }
 }

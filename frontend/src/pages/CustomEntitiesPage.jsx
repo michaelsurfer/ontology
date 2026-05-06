@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -40,6 +40,8 @@ export function CustomEntitiesPage() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState(createEmptyEntityForm())
+  /* When false, display name stays in sync with entity name; set true after user edits display name. */
+  const hasUserCustomizedDisplayNameRef = useRef(false)
 
   const [isFieldsDialogOpen, setIsFieldsDialogOpen] = useState(false)
   const [activeEntity, setActiveEntity] = useState(null)
@@ -48,6 +50,15 @@ export function CustomEntitiesPage() {
   useEffect(() => {
     void loadCustomEntities({ setEntities, setErrorMessage, setIsLoading })
   }, [])
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return
+    }
+    const entityName = String(formData.entity_name || '')
+    const displayName = String(formData.display_name || '')
+    hasUserCustomizedDisplayNameRef.current = displayName !== entityName
+  }, [isDialogOpen, formData.entity_name, formData.display_name])
 
   const canCreate = useMemo(() => {
     const entityNameErrorText = getEntityNameErrorText({
@@ -211,7 +222,16 @@ export function CustomEntitiesPage() {
           <TextField
             label="Entity name (table name)"
             value={formData.entity_name}
-            onChange={(event) => setFormData((prev) => ({ ...prev, entity_name: event.target.value }))}
+            onChange={(event) => {
+              const newEntityName = event.target.value
+              setFormData((previous) => ({
+                ...previous,
+                entity_name: newEntityName,
+                display_name: hasUserCustomizedDisplayNameRef.current
+                  ? previous.display_name
+                  : newEntityName,
+              }))
+            }}
             error={Boolean(entityNameErrorText)}
             helperText={
               entityNameErrorText || 'Must match: /^[a-z][a-z0-9_]*$/ (example: "projects")'
@@ -221,7 +241,10 @@ export function CustomEntitiesPage() {
           <TextField
             label="Display name"
             value={formData.display_name}
-            onChange={(event) => setFormData((prev) => ({ ...prev, display_name: event.target.value }))}
+            onChange={(event) => {
+              hasUserCustomizedDisplayNameRef.current = true
+              setFormData((previous) => ({ ...previous, display_name: event.target.value }))
+            }}
             required
           />
 
@@ -382,7 +405,9 @@ export function CustomEntitiesPage() {
         <DialogTitle>Manage fields: {activeEntity?.display_name}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            This will add real SQL columns (safe). Disabling a field hides it from the UI and RDF export.
+            This will add real SQL columns (safe). Disabling a field hides it from the UI and RDF export. Deleting a field
+            removes its column and all stored values; related property mappings, guardrail rules, and relationships that
+            used this column are removed automatically.
           </Typography>
 
           <Divider />
@@ -475,6 +500,7 @@ export function CustomEntitiesPage() {
                   <TableCell>Type</TableCell>
                   <TableCell>Required</TableCell>
                   <TableCell>Active</TableCell>
+                  <TableCell align="right">Remove</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -490,6 +516,7 @@ export function CustomEntitiesPage() {
                       <MenuItem value="no">No</MenuItem>
                     </TextField>
                   </TableCell>
+                  <TableCell align="right" />
                 </TableRow>
                 {(activeEntity?.fields || []).map((field) => (
                   <TableRow key={field.id} hover>
@@ -517,6 +544,27 @@ export function CustomEntitiesPage() {
                         <MenuItem value="yes">Yes</MenuItem>
                         <MenuItem value="no">No</MenuItem>
                       </TextField>
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label={`Delete field ${field.field_name}`}
+                        disabled={(activeEntity?.fields || []).length <= 1}
+                        onClick={() =>
+                          void deleteFieldAndReload({
+                            entityName: activeEntity?.entity_name,
+                            fieldId: field.id,
+                            fieldLabel: field.field_name,
+                            setEntities,
+                            setActiveEntity,
+                            setErrorMessage,
+                            setIsLoading,
+                          })
+                        }
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -667,6 +715,42 @@ async function addFieldAndReload({
     await loadCustomEntities({ setEntities, setErrorMessage, setIsLoading })
     setActiveEntity(updatedEntity || null)
     setNewFieldFormData(createEmptyField())
+  } catch (error) {
+    setErrorMessage(getErrorMessage(error))
+  } finally {
+    setIsLoading(false)
+  }
+}
+
+/* Delete a field (drops column and related data) then reload entities list. */
+async function deleteFieldAndReload({
+  entityName,
+  fieldId,
+  fieldLabel,
+  setEntities,
+  setActiveEntity,
+  setErrorMessage,
+  setIsLoading,
+}) {
+  if (!entityName || !fieldId) {
+    return
+  }
+
+  const safeLabel = String(fieldLabel || '').trim() || 'this field'
+  const shouldDelete = window.confirm(
+    `Delete field "${safeLabel}"?\n\nAll values in this column will be permanently removed. Related Context Map relationships and guardrail rules that use this column will also be removed.`,
+  )
+  if (!shouldDelete) {
+    return
+  }
+
+  setIsLoading(true)
+  setErrorMessage('')
+  try {
+    const response = await apiClient.delete(`/custom-entities/${entityName}/fields/${fieldId}`)
+    const updatedEntity = response.data
+    await loadCustomEntities({ setEntities, setErrorMessage, setIsLoading })
+    setActiveEntity(updatedEntity || null)
   } catch (error) {
     setErrorMessage(getErrorMessage(error))
   } finally {

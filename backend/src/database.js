@@ -206,6 +206,12 @@ export function initializeDatabase() {
     database.exec('ALTER TABLE custom_entities ADD COLUMN is_link_table INTEGER NOT NULL DEFAULT 0')
   }
 
+  const entityMappingColumns = database.prepare("PRAGMA table_info('entity_mappings')").all()
+  const entityMappingColumnNames = new Set(entityMappingColumns.map((row) => row.name))
+  if (!entityMappingColumnNames.has('parent_entity_name')) {
+    database.exec('ALTER TABLE entity_mappings ADD COLUMN parent_entity_name TEXT')
+  }
+
   // Ensure a unique index exists for suggestion fingerprints (dedupe)
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS ontology_suggestions_fingerprint_unique
@@ -213,17 +219,24 @@ export function initializeDatabase() {
     WHERE fingerprint IS NOT NULL;
   `)
 
-  const baseOntologyIri = 'http://example.com/context#'
+  const defaultOntologyBaseIri = 'http://example.com/context#'
 
   const settingsRow = database
     .prepare('SELECT id, base_iri FROM ontology_settings WHERE id = 1')
     .get()
 
-  const isFirstRun = !settingsRow
   if (!settingsRow) {
     database
       .prepare('INSERT INTO ontology_settings (id, base_iri) VALUES (1, ?)')
-      .run(baseOntologyIri)
+      .run(defaultOntologyBaseIri)
+  } else {
+    const storedBaseIri = String(settingsRow.base_iri || '').trim()
+    const isLegacyDemoNamespace = storedBaseIri.includes('physicalai.example')
+    if (isLegacyDemoNamespace && storedBaseIri !== defaultOntologyBaseIri) {
+      database
+        .prepare('UPDATE ontology_settings SET base_iri = ? WHERE id = 1')
+        .run(defaultOntologyBaseIri)
+    }
   }
 
   const aiPlanningSettingsRow = database.prepare('SELECT id FROM ai_planning_settings WHERE id = 1').get()

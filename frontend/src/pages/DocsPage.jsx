@@ -5,7 +5,6 @@ import {
   CardContent,
   Chip,
   Divider,
-  Link,
   Stack,
   Typography,
 } from '@mui/material'
@@ -17,7 +16,7 @@ export function DocsPage() {
       <Box>
         <Typography variant="h4">Docs</Typography>
         <Typography variant="body1" color="text.secondary">
-          Developer documentation for the Mission AI APIs and the OntoX SDK/CLI.
+          Developer documentation for the ontology APIs, the Rust RDF cache + SPARQL service, and the OntoX SDK/CLI.
         </Typography>
       </Box>
 
@@ -27,6 +26,7 @@ export function DocsPage() {
             Quick links
           </Typography>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <Chip label="Architecture" component="a" href="#architecture" clickable />
             <Chip label="Backend API" component="a" href="#backend-api" clickable />
             <Chip label="Ingestion + Suggestions" component="a" href="#ingestion-api" clickable />
             <Chip label="SPARQL API" component="a" href="#sparql-api" clickable />
@@ -35,6 +35,28 @@ export function DocsPage() {
             <Chip label="SDK (Python)" component="a" href="#sdk-python" clickable />
             <Chip label="CLI" component="a" href="#cli" clickable />
           </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" id="architecture">
+        <CardContent>
+          <Typography variant="h6">Architecture</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            <b>Node backend</b> owns SQLite, CRUD, RDF Turtle export, SHACL validation, and the schema graph for the UI (
+            <code>GET /api/graph/schema</code>). After you create or edit data, mappings, relationships, or ontology
+            settings, the backend tries to <b>refresh the Rust cache</b> by re-exporting Turtle and calling the Rust
+            service <code>POST /cache/load</code> (best effort; writes still succeed if Rust is down).
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <b>Rust service</b> (<code>rdf-cache-service/</code>) holds an in-memory Turtle cache and runs{' '}
+            <b>SPARQL SELECT</b> with Oxigraph. Query Studio and <code>POST /api/sparql</code> go through this service.
+            The <b>context map</b> in the app does not require Rust; it reads schema metadata from Node only.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Backend env: <code>RDF_CACHE_URL</code> (default <code>http://127.0.0.1:8181</code>). Run Rust with{' '}
+            <code>cd rdf-cache-service && cargo run</code> — see repo <code>README.md</code> and{' '}
+            <code>rdf-cache-service/README.md</code>.
+          </Typography>
         </CardContent>
       </Card>
 
@@ -54,7 +76,39 @@ export function DocsPage() {
               GET /api/entities
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Returns builtin CRM entities and custom entities with their active columns.
+              Returns custom entities (and link-table entities where applicable) with active columns for forms and
+              joins.
+            </Typography>
+          </Stack>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Relationships</Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+              GET /api/relationships
+              <br />
+              POST /api/relationships
+              <br />
+              PUT /api/relationships/:id
+              <br />
+              DELETE /api/relationships/:id
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Defines object properties between entities; many-to-many uses a system-managed SQL link table. Successful
+              mutations refresh the Rust RDF cache when the service is reachable.
+            </Typography>
+          </Stack>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Schema graph (Context map)</Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+              GET /api/graph/schema
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              JSON nodes/edges for the graph visualization — served from SQLite, independent of the Rust SPARQL service.
             </Typography>
           </Stack>
 
@@ -72,9 +126,11 @@ export function DocsPage() {
               POST /api/custom-entities/:entityName/fields
               <br />
               PUT /api/custom-entities/:entityName/fields/:fieldId
+              <br />
+              DELETE /api/custom-entities/:entityName/fields/:fieldId
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Create/delete custom entities and manage fields (add column, toggle active/required).
+              Create/delete custom entities and manage fields (add column, drop column, toggle active/required).
             </Typography>
           </Stack>
 
@@ -193,16 +249,23 @@ export function DocsPage() {
 
       <Card variant="outlined" id="sparql-api">
         <CardContent>
-          <Typography variant="h6">SPARQL API</Typography>
+          <Typography variant="h6">SPARQL API (via Node → Rust)</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            SPARQL queries execute against an in-memory RDF graph built from current relational
-            data + mappings at query time.
+            The backend builds or refreshes Turtle from SQLite (see export options below), keeps it in the{' '}
+            <b>Rust RDF cache service</b>, and runs <b>SPARQL SELECT</b> with <b>Oxigraph</b>. If the cache is empty,
+            the first query can trigger a warm-up (export + <code>POST /cache/load</code> on Rust). For reliable Query
+            Studio usage, run <code>rdf-cache-service</code> locally (default <code>127.0.0.1:8181</code>).
           </Typography>
 
           <Divider sx={{ my: 2 }} />
 
           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
             POST /api/sparql
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Direct Rust endpoint (same graph as cache):{' '}
+            <code>POST {'{RDF_CACHE_URL}'}/sparql/query</code> with body{' '}
+            <code>{`{ "query": "SELECT ..." }`}</code>.
           </Typography>
 
           <Typography variant="subtitle2" sx={{ mt: 2 }}>
@@ -236,7 +299,8 @@ export function DocsPage() {
         <CardContent>
           <Typography variant="h6">RDF Export API</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Exports Turtle (TTL) for the current model + instance data (depending on options).
+            Exports Turtle (TTL) for the current model + instance data (depending on options). This runs entirely in the
+            Node backend; use it to inspect graph text or to manually load Turtle into the Rust cache if needed.
           </Typography>
 
           <Divider sx={{ my: 2 }} />
@@ -345,16 +409,13 @@ node packages/ontox-cli/src/main.js sparql query --query "PREFIX ex: <http://exa
       </Card>
 
       <Typography variant="body2" color="text.secondary">
-        Missing something? Tell me which endpoints/flows you want to document (relationships, SHACL
-        rules, mappings), and I’ll extend this page.
+        For SHACL rules, mappings, and ontology settings, use the in-app pages or open an issue with the flows you want
+        documented here.
       </Typography>
 
       <Typography variant="body2" color="text.secondary">
-        Related: see the repo README at{' '}
-        <Link href="/" onClick={(event) => event.preventDefault()}>
-          README.md
-        </Link>
-        .
+        Related: see the repository root <code>README.md</code> and <code>rdf-cache-service/README.md</code> for runbooks
+        and curl examples.
       </Typography>
     </Stack>
   )

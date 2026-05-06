@@ -35,7 +35,11 @@ export function MappingsPage() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingMapping, setEditingMapping] = useState(null)
-  const [mappingFormData, setMappingFormData] = useState({ class_iri: '', subject_iri_template: '' })
+  const [mappingFormData, setMappingFormData] = useState({
+    class_iri: '',
+    subject_iri_template: '',
+    parent_entity_name: '',
+  })
 
   const [isPropertyDialogOpen, setIsPropertyDialogOpen] = useState(false)
   const [editingPropertyMapping, setEditingPropertyMapping] = useState(null)
@@ -124,6 +128,7 @@ export function MappingsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>Entity</TableCell>
+                  <TableCell>Parent (subclass of)</TableCell>
                   <TableCell>OWL Class IRI</TableCell>
                   <TableCell>Subject IRI template</TableCell>
                   <TableCell>Actions</TableCell>
@@ -133,6 +138,15 @@ export function MappingsPage() {
                 {entityMappings.map((mapping) => (
                   <TableRow key={mapping.entity_name} hover>
                     <TableCell>{mapping.entity_name}</TableCell>
+                    <TableCell>
+                      {mapping.parent_entity_name ? (
+                        <Typography variant="body2">{mapping.parent_entity_name}</Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell sx={{ maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {mapping.class_iri}
                     </TableCell>
@@ -177,7 +191,7 @@ export function MappingsPage() {
                 ))}
                 {entityMappings.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4}>
+                    <TableCell colSpan={5}>
                       <Typography variant="body2" color="text.secondary">
                         No mappings found.
                       </Typography>
@@ -303,6 +317,7 @@ export function MappingsPage() {
       <EntityMappingDialog
         isOpen={isDialogOpen}
         mapping={editingMapping}
+        allEntityMappings={entityMappings}
         formData={mappingFormData}
         setFormData={setMappingFormData}
         onClose={() => setIsDialogOpen(false)}
@@ -345,11 +360,34 @@ export function MappingsPage() {
 }
 
 /* Render a dialog for editing one entity mapping. */
-function EntityMappingDialog({ isOpen, mapping, formData, setFormData, onClose, onSave }) {
+function EntityMappingDialog({ isOpen, mapping, allEntityMappings, formData, setFormData, onClose, onSave }) {
+  const currentEntityName = mapping?.entity_name ? String(mapping.entity_name) : ''
+  const parentChoices = (Array.isArray(allEntityMappings) ? allEntityMappings : []).filter(
+    (row) => row && row.entity_name && String(row.entity_name) !== currentEntityName,
+  )
+
   return (
     <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>Edit mapping: {mapping?.entity_name}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+        <TextField
+          select
+          label="Parent entity (rdfs:subClassOf)"
+          value={formData.parent_entity_name || ''}
+          onChange={(event) =>
+            setFormData((previousData) => ({ ...previousData, parent_entity_name: event.target.value }))
+          }
+          helperText="Optional. Exports: child class IRI rdfs:subClassOf parent class IRI. Rows stay typed as the child class."
+        >
+          <MenuItem value="">
+            <em>None</em>
+          </MenuItem>
+          {parentChoices.map((row) => (
+            <MenuItem key={row.entity_name} value={row.entity_name}>
+              {row.entity_name}
+            </MenuItem>
+          ))}
+        </TextField>
         <TextField
           label="OWL Class IRI"
           value={formData.class_iri}
@@ -533,6 +571,7 @@ function openEditDialog({ mapping, setEditingMapping, setMappingFormData, setIsD
   setMappingFormData({
     class_iri: mapping.class_iri || '',
     subject_iri_template: mapping.subject_iri_template || '',
+    parent_entity_name: mapping.parent_entity_name ? String(mapping.parent_entity_name) : '',
   })
   setIsDialogOpen(true)
 }

@@ -1,7 +1,19 @@
-import { runSparqlSkill } from './sparqlSkill.js'
+import { normalizeOpenAiUsage, runSparqlSkill } from './sparqlSkill.js'
 
 /* Re-export NL→SPARQL generation for callers that need only the query step. */
 export { generateSparqlFromQuestion } from './sparqlSkill.js'
+
+/* Sum token usage from two OpenAI completion payloads (e.g. NL→SPARQL + summary). */
+function mergeOpenAiTokenUsage(first, second) {
+  if (!first && !second) {
+    return null
+  }
+  return {
+    promptTokens: (first?.promptTokens || 0) + (second?.promptTokens || 0),
+    completionTokens: (first?.completionTokens || 0) + (second?.completionTokens || 0),
+    totalTokens: (first?.totalTokens || 0) + (second?.totalTokens || 0),
+  }
+}
 
 /* Answer a question using the SPARQL skill (retrieve) plus a natural-language summary. */
 export async function answerQuestionWithSparql({
@@ -22,6 +34,8 @@ export async function answerQuestionWithSparql({
     exportOptions,
   })
 
+  const usageFromSparqlGeneration = skillResult.openAiUsage || null
+
   if (!skillResult.ok) {
     return {
       model: skillResult.model,
@@ -31,10 +45,11 @@ export async function answerQuestionWithSparql({
       rows: [],
       executionTimeMs: skillResult.executionTimeMs,
       answerText: `Query failed: ${skillResult.error}`,
+      tokenUsage: usageFromSparqlGeneration,
     }
   }
 
-  const answerText = await summarizeSparqlResult({
+  const summaryResult = await summarizeSparqlResult({
     openAiClient,
     questionText,
     sparqlText: skillResult.sparqlText,
@@ -51,7 +66,8 @@ export async function answerQuestionWithSparql({
     variables: skillResult.variables,
     rows: skillResult.rows,
     executionTimeMs: skillResult.executionTimeMs,
-    answerText,
+    answerText: summaryResult.answerText,
+    tokenUsage: mergeOpenAiTokenUsage(usageFromSparqlGeneration, summaryResult.usage),
   }
 }
 
@@ -67,7 +83,7 @@ async function summarizeSparqlResult({
 }) {
   if (!openAiClient) {
     const fallbackCount = Array.isArray(rows) ? rows.length : 0
-    return `Query returned ${fallbackCount} row(s).`
+    return { answerText: `Query returned ${fallbackCount} row(s).`, usage: null }
   }
 
   const model = String(process.env.OPENAI_MODEL || '').trim() || 'gpt-4o-mini'
@@ -110,9 +126,13 @@ async function summarizeSparqlResult({
       messages,
     })
     const content = completion?.choices?.[0]?.message?.content
-    return content ? String(content).trim() : 'No answer.'
+    const summaryUsage = normalizeOpenAiUsage(completion?.usage)
+    return {
+      answerText: content ? String(content).trim() : 'No answer.',
+      usage: summaryUsage,
+    }
   } catch (error) {
     const fallbackCount = Array.isArray(rows) ? rows.length : 0
-    return `Query returned ${fallbackCount} row(s).`
+    return { answerText: `Query returned ${fallbackCount} row(s).`, usage: null }
   }
 }

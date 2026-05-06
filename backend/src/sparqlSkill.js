@@ -26,8 +26,13 @@ export async function generateSparqlFromQuestion({
       content:
         'You are a helpful data assistant. You translate user questions into SPARQL SELECT queries to run against an RDF graph. ' +
         'Return JSON only with keys: sparql, notes. ' +
-        'Rules: use SELECT (no INSERT/DELETE/LOAD). Always include a LIMIT 50 unless the user explicitly asks for more. ' +
+        'Rules: use SELECT only. The query engine rejects ASK, CONSTRUCT, and DESCRIBE — never emit them. No INSERT/DELETE/LOAD. Always include a LIMIT 50 unless the user explicitly asks for more. ' +
         'Copy IRIs exactly from the payload: use predicate_iri, domain_class_iri, and range_class_iri from sparqlRelationshipHints — never invent property or class IRIs. ' +
+        'Subclass / class hierarchy is separate: use sparqlSubclassHints (child_class_iri, parent_class_iri, sparql_fragments). It is NOT in sparqlRelationshipHints. ' +
+        'If the user asks to show or list subclass relationships, hierarchy, or rdfs:subClassOf edges, use the exact query in sparql_list_all_subclass_edges (or SELECT ?c ?p WHERE { ?c rdfs:subClassOf ?p . } with PREFIX rdfs:). ' +
+        'Important: individuals are rdf:type the child (leaf) class only. A filter like ?x rdf:type <parent_class_iri> will miss instances of subclasses. ' +
+        'To include all instances under a parent class, use ?x rdf:type ?c . ?c rdfs:subClassOf* <parent_class_iri> . (or adapt sparql_fragments.select_instances_under_parent_including_subclasses). ' +
+        'For questions about whether X is a subclass of Y, match sparqlSubclassHints and use sparql_fragments.select_confirm_child_subclass_of_parent or a SELECT with FILTER EXISTS — never ASK. ' +
         'If the user asks how two tables/entities are linked, match sparqlRelationshipHints by subject_entity and object_entity, then start from copy_ready_sparql_fragment (adapt variable names and add FILTER/BIND only as needed). ' +
         'If the user asks to show/list members/items (not just counts), include at least one human-readable literal column in SELECT using OPTIONAL with domain_readable_property_iris or range_readable_property_iris (for example ?personName), so output is not only IRIs. ' +
         'If you use prefixes (ex:, rdf:, rdfs:, owl:, xsd:, res:), you MUST include PREFIX declarations in the SPARQL. ' +
@@ -53,7 +58,7 @@ export async function generateSparqlFromQuestion({
     },
   ]
 
-  const responseJson = await tryChatJson({ openAiClient, model, messages })
+  const { parsed: responseJson, usage: generationUsage } = await tryChatJson({ openAiClient, model, messages })
   const sparqlText = String(responseJson?.sparql || '').trim()
   if (!sparqlText) {
     throw new Error('Failed to generate SPARQL')
@@ -63,6 +68,7 @@ export async function generateSparqlFromQuestion({
     model,
     sparqlText,
     notes: responseJson?.notes ? String(responseJson.notes) : '',
+    usage: generationUsage,
   }
 }
 
@@ -88,6 +94,7 @@ export async function runSparqlSkill({
   let model = String(process.env.OPENAI_MODEL || '').trim() || 'gpt-4o-mini'
   let sparqlNotes = ''
   let finalSparql = ''
+  let openAiUsageFromGeneration = null
 
   if (trimmedSparql) {
     finalSparql = ensureSparqlHasCommonPrefixes({ queryText: trimmedSparql, baseIri })
@@ -100,6 +107,7 @@ export async function runSparqlSkill({
     })
     model = generation.model
     sparqlNotes = generation.notes || ''
+    openAiUsageFromGeneration = generation.usage || null
     finalSparql = ensureSparqlHasCommonPrefixes({
       queryText: generation.sparqlText,
       baseIri,
@@ -121,6 +129,7 @@ export async function runSparqlSkill({
       variables: queryResult.variables,
       rows: queryResult.rows,
       executionTimeMs: finishedAtMs - startedAtMs,
+      openAiUsage: openAiUsageFromGeneration,
     }
   } catch (error) {
     const finishedAtMs = Date.now()
@@ -133,6 +142,7 @@ export async function runSparqlSkill({
       variables: [],
       rows: [],
       executionTimeMs: finishedAtMs - startedAtMs,
+      openAiUsage: openAiUsageFromGeneration,
     }
   }
 }
@@ -171,6 +181,30 @@ export function ensureSparqlHasCommonPrefixes({ queryText, baseIri }) {
   return `${prefixLines}\n\n${normalizedQueryText}`
 }
 
+/* Normalize OpenAI completion.usage into stable numeric fields (camelCase). */
+export function normalizeOpenAiUsage(usage) {
+  if (!usage || typeof usage !== 'object') {
+    return null
+  }
+  const promptRaw = usage.prompt_tokens ?? usage.input_tokens
+  const completionRaw = usage.completion_tokens ?? usage.output_tokens
+  const totalRaw = usage.total_tokens
+  if (promptRaw == null && completionRaw == null && totalRaw == null) {
+    return null
+  }
+  const safePrompt = Number.isFinite(Number(promptRaw)) ? Math.max(0, Number(promptRaw)) : 0
+  const safeCompletion = Number.isFinite(Number(completionRaw)) ? Math.max(0, Number(completionRaw)) : 0
+  let safeTotal = Number.isFinite(Number(totalRaw)) ? Math.max(0, Number(totalRaw)) : 0
+  if (safeTotal === 0 && (safePrompt > 0 || safeCompletion > 0)) {
+    safeTotal = safePrompt + safeCompletion
+  }
+  return {
+    promptTokens: safePrompt,
+    completionTokens: safeCompletion,
+    totalTokens: safeTotal,
+  }
+}
+
 /* Attempt to get structured JSON back from chat completions. */
 export async function tryChatJson({ openAiClient, model, messages }) {
   let result = null
@@ -189,14 +223,15 @@ export async function tryChatJson({ openAiClient, model, messages }) {
     })
   }
 
+  const usage = normalizeOpenAiUsage(result?.usage)
   const content = result?.choices?.[0]?.message?.content
   if (!content) {
-    return null
+    return { parsed: null, usage }
   }
 
   try {
-    return JSON.parse(content)
+    return { parsed: JSON.parse(content), usage }
   } catch (error) {
-    return null
+    return { parsed: null, usage }
   }
 }

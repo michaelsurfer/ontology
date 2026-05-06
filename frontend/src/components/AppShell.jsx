@@ -16,9 +16,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
+import LightModeIcon from '@mui/icons-material/LightMode'
 import MenuIcon from '@mui/icons-material/Menu'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import { useColorMode } from '../theme/ColorModeContext'
 
 const drawerWidthPixels = 264
 
@@ -26,6 +30,7 @@ const drawerWidthPixels = 264
 export function AppShell() {
   const location = useLocation()
   const theme = useTheme()
+  const { colorMode, toggleColorMode } = useColorMode()
   const isDesktopViewport = useMediaQuery(theme.breakpoints.up('md'))
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = React.useState(false)
   const [isAdvancedMenuOpen, setIsAdvancedMenuOpen] = React.useState(false)
@@ -63,25 +68,45 @@ export function AppShell() {
   function renderDrawerContent() {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Box sx={{ px: 2, py: 2 }}>
-          <Typography
-            variant="subtitle1"
-            sx={{
-              fontWeight: 900,
-              lineHeight: 1.05,
-              fontSize: 22,
-              letterSpacing: 0.2,
-            }}
+        <Box
+          sx={{
+            px: 2,
+            py: 2,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 1,
+          }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 900,
+                lineHeight: 1.05,
+                fontSize: 22,
+                letterSpacing: 0.2,
+              }}
+            >
+              Mission AI
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.25, lineHeight: 1.2 }}
+            >
+              The context layer that keeps AI accurate
+            </Typography>
+          </Box>
+          <IconButton
+            size="small"
+            onClick={toggleColorMode}
+            aria-label={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            sx={{ mt: -0.5, flexShrink: 0 }}
           >
-            Mission AI
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mt: 0.25, lineHeight: 1.2 }}
-          >
-            The context layer that keeps AI accurate
-          </Typography>
+            {colorMode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+          </IconButton>
         </Box>
 
         <Divider />
@@ -200,11 +225,11 @@ export function AppShell() {
             borderColor: 'divider',
           }}
         >
-          <Toolbar sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
+          <Toolbar sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
             <IconButton color="inherit" edge="start" onClick={toggleMobileDrawer}>
               <MenuIcon />
             </IconButton>
-            <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05, flex: 1, minWidth: 0 }}>
               <Typography
                 variant="subtitle1"
                 sx={{
@@ -220,6 +245,14 @@ export function AppShell() {
                 The context layer that keeps AI accurate
               </Typography>
             </Box>
+            <IconButton
+              color="inherit"
+              edge="end"
+              onClick={toggleColorMode}
+              aria-label={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {colorMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+            </IconButton>
           </Toolbar>
         </AppBar>
 
@@ -281,15 +314,15 @@ function NavigationListItem({ to, label, currentPath, onNavigate }) {
           onNavigate()
         }
       }}
-      sx={{
+      sx={(muiTheme) => ({
         borderRadius: 2,
         '&.Mui-selected': {
-          backgroundColor: 'rgba(25, 118, 210, 0.10)',
+          backgroundColor: alpha(muiTheme.palette.primary.main, muiTheme.palette.mode === 'dark' ? 0.22 : 0.1),
         },
         '&.Mui-selected:hover': {
-          backgroundColor: 'rgba(25, 118, 210, 0.16)',
+          backgroundColor: alpha(muiTheme.palette.primary.main, muiTheme.palette.mode === 'dark' ? 0.3 : 0.16),
         },
-      }}
+      })}
     >
       <ListItemText
         primary={label}
@@ -316,15 +349,15 @@ function AdvancedMenuSection({ label, currentPath, isOpen, setIsOpen, items, onN
       <ListItemButton
         selected={isSectionActive}
         onClick={() => setIsOpen((previousValue) => !previousValue)}
-        sx={{
+        sx={(muiTheme) => ({
           borderRadius: 2,
           '&.Mui-selected': {
-            backgroundColor: 'rgba(25, 118, 210, 0.10)',
+            backgroundColor: alpha(muiTheme.palette.primary.main, muiTheme.palette.mode === 'dark' ? 0.22 : 0.1),
           },
           '&.Mui-selected:hover': {
-            backgroundColor: 'rgba(25, 118, 210, 0.16)',
+            backgroundColor: alpha(muiTheme.palette.primary.main, muiTheme.palette.mode === 'dark' ? 0.3 : 0.16),
           },
-        }}
+        })}
       >
         <ListItemText
           primary={label}

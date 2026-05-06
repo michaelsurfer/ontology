@@ -26,6 +26,45 @@ export function getEntityMappings() {
   return database.prepare('SELECT * FROM entity_mappings ORDER BY entity_name ASC').all()
 }
 
+/* Normalize optional parent entity name for subclass (OWL rdfs:subClassOf in export). */
+function normalizeParentEntityName(value) {
+  const trimmed = String(value || '').trim()
+  return trimmed ? trimmed : null
+}
+
+/* Ensure parent mapping exists and subclass chain does not loop back to entityName. */
+function assertValidSubclassParent(database, entityName, parentEntityName) {
+  if (!parentEntityName) {
+    return
+  }
+  if (parentEntityName === entityName) {
+    throw new Error('An entity cannot be its own parent class')
+  }
+  const parentRow = database
+    .prepare('SELECT entity_name FROM entity_mappings WHERE entity_name = ?')
+    .get(parentEntityName)
+  if (!parentRow) {
+    throw new Error(`Parent entity mapping not found: ${parentEntityName}`)
+  }
+
+  let walker = parentEntityName
+  const visited = new Set()
+  while (walker) {
+    if (walker === entityName) {
+      throw new Error('Subclass mapping would create a cycle')
+    }
+    if (visited.has(walker)) {
+      throw new Error('Existing subclass chain contains a cycle')
+    }
+    visited.add(walker)
+    const nextRow = database
+      .prepare('SELECT parent_entity_name FROM entity_mappings WHERE entity_name = ?')
+      .get(walker)
+    const nextParent = nextRow?.parent_entity_name ? String(nextRow.parent_entity_name).trim() : null
+    walker = nextParent || null
+  }
+}
+
 /* Insert or update a single entity mapping. */
 export function upsertEntityMapping(entityName, inputData) {
   const database = getDatabase()
@@ -34,22 +73,26 @@ export function upsertEntityMapping(entityName, inputData) {
   const normalizedEntityName = String(entityName || '').trim()
   const classIri = String(safeInputData.class_iri || '').trim()
   const subjectIriTemplate = String(safeInputData.subject_iri_template || '').trim()
+  const parentEntityName = normalizeParentEntityName(safeInputData.parent_entity_name)
 
   if (!normalizedEntityName || !classIri || !subjectIriTemplate) {
     throw new Error('entityName, class_iri, and subject_iri_template are required')
   }
 
+  assertValidSubclassParent(database, normalizedEntityName, parentEntityName)
+
   database
     .prepare(
       `
-      INSERT INTO entity_mappings (entity_name, class_iri, subject_iri_template)
-      VALUES (?, ?, ?)
+      INSERT INTO entity_mappings (entity_name, class_iri, subject_iri_template, parent_entity_name)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(entity_name) DO UPDATE SET
         class_iri = excluded.class_iri,
-        subject_iri_template = excluded.subject_iri_template
+        subject_iri_template = excluded.subject_iri_template,
+        parent_entity_name = excluded.parent_entity_name
     `,
     )
-    .run(normalizedEntityName, classIri, subjectIriTemplate)
+    .run(normalizedEntityName, classIri, subjectIriTemplate, parentEntityName)
 
   return database
     .prepare('SELECT * FROM entity_mappings WHERE entity_name = ?')
@@ -64,6 +107,9 @@ export function deleteEntityMapping(entityName) {
     throw new Error('entityName is required')
   }
 
+  database
+    .prepare('UPDATE entity_mappings SET parent_entity_name = NULL WHERE parent_entity_name = ?')
+    .run(normalizedEntityName)
   const result = database.prepare('DELETE FROM entity_mappings WHERE entity_name = ?').run(normalizedEntityName)
   return { deleted: result.changes > 0, entity_name: normalizedEntityName }
 }

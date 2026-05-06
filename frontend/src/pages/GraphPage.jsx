@@ -54,6 +54,7 @@ export function GraphPage() {
   const [baseIri, setBaseIri] = useState('http://example.com/context#')
 
   const [entities, setEntities] = useState([])
+  const [entityMappings, setEntityMappings] = useState([])
 
   const entityColumns = useMemo(() => {
     const map = new Map()
@@ -135,6 +136,7 @@ export function GraphPage() {
     void loadGraph({ setNodes, setEdges, setErrorMessage, setIsLoading })
     void loadOntologySettings({ setBaseIri })
     void loadEntities({ setEntities })
+    void loadEntityMappings({ setEntityMappings })
   }, [])
 
   useEffect(() => {
@@ -206,7 +208,8 @@ export function GraphPage() {
       <Card variant="outlined">
         <CardContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Tip: drag a connection from one node to another to create a relationship. Click an edge to edit it. Click a
+            Tip: dashed edges are subclass (rdfs:subClassOf) and do not open the relationship editor. Drag a
+            connection from one node to another to create a relationship. Click a solid edge to edit it. Click a
             node to highlight it and any directly related entities; click the background to clear. Click the same node
             again to deselect.
           </Typography>
@@ -239,6 +242,9 @@ export function GraphPage() {
               }
               onEdgeClick={(event, edge) => {
                 event.preventDefault()
+                if (edge?.data?.edge_kind === 'subclass') {
+                  return
+                }
                 openEditRelationshipDialogFromEdge({
                   edge,
                   setEditingRelationshipId,
@@ -268,9 +274,10 @@ export function GraphPage() {
         setFormData={setRelationshipFormData}
         onClose={() => setIsDialogOpen(false)}
         onSave={() =>
-          void saveRelationshipAndReloadGraph({
+          void saveGraphConnectionAndReload({
             editingRelationshipId,
             formData: relationshipFormData,
+            entityMappings,
             setErrorMessage,
             setIsLoading,
             setIsDialogOpen,
@@ -624,6 +631,17 @@ async function loadEntities({ setEntities }) {
   }
 }
 
+/* Load entity mappings so graph can create subclass links. */
+async function loadEntityMappings({ setEntityMappings }) {
+  try {
+    const response = await apiClient.get('/mappings/entities')
+    const data = Array.isArray(response.data) ? response.data : []
+    setEntityMappings(data)
+  } catch (error) {
+    setEntityMappings([])
+  }
+}
+
 /* Render a relationship create/edit dialog (link table is always created on the server). */
 function RelationshipDialog({
   isOpen,
@@ -641,6 +659,8 @@ function RelationshipDialog({
   onDelete,
 }) {
   const entitiesForDropdown = Array.isArray(entities) ? entities : []
+  const connectionType = formData.connection_type === 'subclass' ? 'subclass' : 'relationship'
+  const isSubclassConnection = connectionType === 'subclass'
   const subjectColumns = entityColumns.get(formData.subject_entity) || ['id']
   const objectColumns = entityColumns.get(formData.object_entity) || ['id']
   const hasLinkTableInForm = Boolean(String(formData.junction_entity || '').trim())
@@ -649,30 +669,50 @@ function RelationshipDialog({
     <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>{editingRelationshipId ? 'Edit relationship' : 'Create relationship'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+        {!editingRelationshipId ? (
+          <TextField
+            select
+            label="Connection type"
+            value={connectionType}
+            onChange={(event) =>
+              setFormData((previous) => ({
+                ...previous,
+                connection_type: event.target.value === 'subclass' ? 'subclass' : 'relationship',
+              }))
+            }
+            helperText="Relationship creates a link table. Subclass sets child class rdfs:subClassOf parent class."
+          >
+            <MenuItem value="relationship">Relationship (instance links)</MenuItem>
+            <MenuItem value="subclass">Subclass (class hierarchy)</MenuItem>
+          </TextField>
+        ) : null}
         <Typography variant="body2" color="text.secondary">
-          A link table is created automatically for each relationship (two integer columns for the from/to row ids). Edit
-          membership rows on the Relationships page. RDF and this graph use these links.
+          {isSubclassConnection
+            ? 'Subclass updates ontology hierarchy only. No link-table rows are created.'
+            : 'A link table is created automatically for each relationship (two integer columns for the from/to row ids). Edit membership rows on the Relationships page. RDF and this graph use these links.'}
         </Typography>
 
-        <TextField
-          label="Relationship name"
-          value={formData.relationship_name}
-          onChange={(event) => {
-            const nextName = event.target.value
-            setFormData((previous) => ({
-              ...previous,
-              relationship_name: nextName,
-              predicate_iri: previous.predicate_iri || buildPredicateIri(baseIri, nextName),
-            }))
-          }}
-          placeholder='Example: "Account has Contact"'
-          required
-        />
+        {isSubclassConnection ? null : (
+          <TextField
+            label="Relationship name"
+            value={formData.relationship_name}
+            onChange={(event) => {
+              const nextName = event.target.value
+              setFormData((previous) => ({
+                ...previous,
+                relationship_name: nextName,
+                predicate_iri: previous.predicate_iri || buildPredicateIri(baseIri, nextName),
+              }))
+            }}
+            placeholder='Example: "Account has Contact"'
+            required
+          />
+        )}
 
         <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap' }}>
           <TextField
             select
-            label="From entity"
+            label={isSubclassConnection ? 'Child entity' : 'From entity'}
             value={formData.subject_entity}
             onChange={(event) => {
               const nextSubjectEntity = event.target.value
@@ -702,7 +742,7 @@ function RelationshipDialog({
 
           <TextField
             select
-            label="To entity"
+            label={isSubclassConnection ? 'Parent entity' : 'To entity'}
             value={formData.object_entity}
             onChange={(event) => {
               const nextObjectEntity = event.target.value
@@ -732,71 +772,80 @@ function RelationshipDialog({
           </TextField>
         </Box>
 
-        <Typography variant="subtitle2">Join keys</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap' }}>
-          <TextField
-            select
-            label={`From column (${formData.subject_entity || 'subject'})`}
-            value={formData.subject_column}
-            onChange={(event) => setFormData((previous) => ({ ...previous, subject_column: event.target.value }))}
-            sx={{ flex: '1 1 260px' }}
-            disabled={!formData.subject_entity}
-          >
-            {subjectColumns.map((columnName) => (
-              <MenuItem key={columnName} value={columnName}>
-                {columnName}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label={`To column (${formData.object_entity || 'object'})`}
-            value={formData.object_column}
-            onChange={(event) => setFormData((previous) => ({ ...previous, object_column: event.target.value }))}
-            sx={{ flex: '1 1 260px' }}
-            disabled={!formData.object_entity}
-          >
-            {objectColumns.map((columnName) => (
-              <MenuItem key={columnName} value={columnName}>
-                {columnName}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Box>
-
-        <Typography variant="body2" color="text.secondary">
-          Link table columns store values that match <b>{formData.subject_entity || 'from'}</b>.
-          {formData.subject_column || 'id'} and <b>{formData.object_entity || 'to'}</b>.
-          {formData.object_column || 'id'}.
-        </Typography>
-
-        {hasLinkTableInForm ? (
-          <Typography variant="body2">
-            Link table: <b>{formData.junction_entity}</b> — <b>{formData.junction_subject_column}</b>,{' '}
-            <b>{formData.junction_object_column}</b>. Add rows from Relationships (link icon).
+        {isSubclassConnection ? (
+          <Typography variant="body2" color="text.secondary">
+            Saving creates: <b>{formData.subject_entity || 'child'}</b> rdfs:subClassOf{' '}
+            <b>{formData.object_entity || 'parent'}</b>.
           </Typography>
         ) : (
-          <Typography variant="body2" color="text.secondary">
-            {editingRelationshipId
-              ? 'Saving creates a link table if this edge did not have one yet.'
-              : 'Saving creates a link table from the relationship name and entities (hidden from Objects).'}
-          </Typography>
+          <>
+            <Typography variant="subtitle2">Join keys</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, flexWrap: 'wrap' }}>
+              <TextField
+                select
+                label={`From column (${formData.subject_entity || 'subject'})`}
+                value={formData.subject_column}
+                onChange={(event) => setFormData((previous) => ({ ...previous, subject_column: event.target.value }))}
+                sx={{ flex: '1 1 260px' }}
+                disabled={!formData.subject_entity}
+              >
+                {subjectColumns.map((columnName) => (
+                  <MenuItem key={columnName} value={columnName}>
+                    {columnName}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label={`To column (${formData.object_entity || 'object'})`}
+                value={formData.object_column}
+                onChange={(event) => setFormData((previous) => ({ ...previous, object_column: event.target.value }))}
+                sx={{ flex: '1 1 260px' }}
+                disabled={!formData.object_entity}
+              >
+                {objectColumns.map((columnName) => (
+                  <MenuItem key={columnName} value={columnName}>
+                    {columnName}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+
+            <Typography variant="body2" color="text.secondary">
+              Link table columns store values that match <b>{formData.subject_entity || 'from'}</b>.
+              {formData.subject_column || 'id'} and <b>{formData.object_entity || 'to'}</b>.
+              {formData.object_column || 'id'}.
+            </Typography>
+
+            {hasLinkTableInForm ? (
+              <Typography variant="body2">
+                Link table: <b>{formData.junction_entity}</b> — <b>{formData.junction_subject_column}</b>,{' '}
+                <b>{formData.junction_object_column}</b>. Add rows from Relationships (link icon).
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {editingRelationshipId
+                  ? 'Saving creates a link table if this edge did not have one yet.'
+                  : 'Saving creates a link table from the relationship name and entities (hidden from Objects).'}
+              </Typography>
+            )}
+
+            <FormControlLabel
+              control={<Switch checked={showAdvancedFields} onChange={(event) => setShowAdvancedFields(event.target.checked)} />}
+              label="Show advanced fields"
+            />
+
+            {showAdvancedFields ? (
+              <TextField
+                label="Predicate IRI (ObjectProperty)"
+                value={formData.predicate_iri}
+                onChange={(event) => setFormData((previous) => ({ ...previous, predicate_iri: event.target.value }))}
+                helperText={`Usually generated from Base IRI (${baseIri})`}
+                required
+              />
+            ) : null}
+          </>
         )}
-
-        <FormControlLabel
-          control={<Switch checked={showAdvancedFields} onChange={(event) => setShowAdvancedFields(event.target.checked)} />}
-          label="Show advanced fields"
-        />
-
-        {showAdvancedFields ? (
-          <TextField
-            label="Predicate IRI (ObjectProperty)"
-            value={formData.predicate_iri}
-            onChange={(event) => setFormData((previous) => ({ ...previous, predicate_iri: event.target.value }))}
-            helperText={`Usually generated from Base IRI (${baseIri})`}
-            required
-          />
-        ) : null}
       </DialogContent>
       <DialogActions>
         {editingRelationshipId ? (
@@ -815,9 +864,9 @@ function RelationshipDialog({
         <Button
           onClick={onSave}
           variant="contained"
-          disabled={isLoading || !canSaveRelationshipForm(formData)}
+          disabled={isLoading || !canSaveGraphConnectionForm(formData)}
         >
-          Save relationship
+          {isSubclassConnection ? 'Save subclass' : 'Save relationship'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -827,6 +876,7 @@ function RelationshipDialog({
 /* Default relationship form state. */
 function createEmptyRelationshipForm() {
   return {
+    connection_type: 'relationship',
     relationship_name: '',
     subject_entity: '',
     subject_column: 'id',
@@ -859,6 +909,7 @@ function openCreateRelationshipDialogFromConnection({
   setEditingRelationshipId(null)
   setShowAdvancedFields(false)
   setRelationshipFormData({
+    connection_type: 'relationship',
     relationship_name: relationshipName,
     subject_entity: subjectEntity || '',
     subject_column: suggestions.subject_column,
@@ -885,6 +936,7 @@ function openEditRelationshipDialogFromEdge({
   setShowAdvancedFields(true)
 
   setRelationshipFormData({
+    connection_type: 'relationship',
     relationship_name: edge?.data?.relationship_name || edge?.label || '',
     subject_entity: edge?.data?.subject_entity || edge?.source || '',
     subject_column: edge?.data?.subject_column || 'id',
@@ -899,10 +951,11 @@ function openEditRelationshipDialogFromEdge({
   setIsDialogOpen(true)
 }
 
-/* Persist relationship and reload graph from backend. */
-async function saveRelationshipAndReloadGraph({
+/* Persist a graph connection (relationship or subclass) and reload graph from backend. */
+async function saveGraphConnectionAndReload({
   editingRelationshipId,
   formData,
+  entityMappings,
   setErrorMessage,
   setIsLoading,
   setIsDialogOpen,
@@ -915,12 +968,31 @@ async function saveRelationshipAndReloadGraph({
   setIsLoading(true)
   setErrorMessage('')
   try {
-    const payload = normalizeRelationshipPayload(formData)
+    const connectionType = formData?.connection_type === 'subclass' ? 'subclass' : 'relationship'
 
-    if (editingRelationshipId) {
-      await apiClient.put(`/relationships/${editingRelationshipId}`, payload)
+    if (connectionType === 'subclass') {
+      const childEntityName = String(formData?.subject_entity || '').trim()
+      const parentEntityName = String(formData?.object_entity || '').trim()
+      const mappingRows = Array.isArray(entityMappings) ? entityMappings : []
+      const childMapping = mappingRows.find(
+        (mappingRow) => String(mappingRow?.entity_name || '').trim() === childEntityName,
+      )
+      if (!childMapping) {
+        throw new Error(`Entity mapping not found for child entity: ${childEntityName}`)
+      }
+
+      await apiClient.put(`/mappings/entities/${encodeURIComponent(childEntityName)}`, {
+        class_iri: String(childMapping.class_iri || '').trim(),
+        subject_iri_template: String(childMapping.subject_iri_template || '').trim(),
+        parent_entity_name: parentEntityName || null,
+      })
     } else {
-      await apiClient.post('/relationships', payload)
+      const payload = normalizeRelationshipPayload(formData)
+      if (editingRelationshipId) {
+        await apiClient.put(`/relationships/${editingRelationshipId}`, payload)
+      } else {
+        await apiClient.post('/relationships', payload)
+      }
     }
 
     setIsDialogOpen(false)
@@ -990,9 +1062,15 @@ function normalizeRelationshipPayload(formData) {
   }
 }
 
-/* Whether the relationship dialog has enough information to save. */
-function canSaveRelationshipForm(formData) {
+/* Whether the graph connection dialog has enough information to save. */
+function canSaveGraphConnectionForm(formData) {
   const safeFormData = formData && typeof formData === 'object' ? formData : {}
+  const connectionType = safeFormData.connection_type === 'subclass' ? 'subclass' : 'relationship'
+  if (connectionType === 'subclass') {
+    const childEntity = String(safeFormData.subject_entity || '').trim()
+    const parentEntity = String(safeFormData.object_entity || '').trim()
+    return Boolean(childEntity && parentEntity && childEntity !== parentEntity)
+  }
   return Boolean(
     String(safeFormData.relationship_name || '').trim() &&
       String(safeFormData.subject_entity || '').trim() &&

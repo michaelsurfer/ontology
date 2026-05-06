@@ -46,6 +46,7 @@ import {
   addCustomEntityField,
   createCustomEntity,
   deleteCustomEntity,
+  deleteCustomEntityField,
   getCustomEntityByName,
   listCustomEntities,
   updateCustomEntityField,
@@ -416,6 +417,20 @@ function startServer() {
     }
   })
 
+  app.delete('/api/custom-entities/:entityName/fields/:fieldId', async (request, response) => {
+    try {
+      const updatedEntity = deleteCustomEntityField({
+        entity_name: request.params.entityName,
+        field_id: request.params.fieldId,
+      })
+      await refreshRustRdfCacheBestEffort()
+      response.json(updatedEntity)
+    } catch (error) {
+      const { status, message } = resolveCustomEntityMutationError(error)
+      response.status(status).json({ error: message })
+    }
+  })
+
   app.get('/api/custom/:entityName', (request, response) => {
     try {
       response.json(listCustomEntityRows(request.params.entityName))
@@ -572,6 +587,7 @@ function startServer() {
         model: result.model,
         enabledRulesCount: rulesContext.enabledRulesCount,
         rulesValidation: rulesValidationPayload,
+        tokenUsage: result.tokenUsage || null,
       })
     } catch (error) {
       response.status(500).json({ error: error?.message ? String(error.message) : 'AI request failed' })
