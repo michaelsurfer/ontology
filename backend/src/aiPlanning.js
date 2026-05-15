@@ -42,7 +42,7 @@ function normalizePlannerDecisionAction(parsed) {
 
 /**
  * Planning agent loop: repeatedly chooses NL graph queries (via SPARQL skill) until it emits a plan.
- * Uses planner_system_prompt from ai_planning_settings (see getPlannerSystemPrompt).
+ * Uses planner_system_prompt from ai_planning_settings (getPlannerSystemPrompt).
  */
 export async function runPlanningAgent({
   openAiClient,

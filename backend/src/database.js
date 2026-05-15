@@ -150,6 +150,14 @@ export function initializeDatabase() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS auto_inject_unmapped (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      payload_json TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'auto_inject',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Draft ontology suggestions generated from ingested data (review before apply)
     CREATE TABLE IF NOT EXISTS ontology_suggestions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,6 +218,21 @@ export function initializeDatabase() {
   const entityMappingColumnNames = new Set(entityMappingColumns.map((row) => row.name))
   if (!entityMappingColumnNames.has('parent_entity_name')) {
     database.exec('ALTER TABLE entity_mappings ADD COLUMN parent_entity_name TEXT')
+  }
+
+  const autoInjectLandingExists = database
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='auto_inject_unmapped'")
+    .get()
+  if (!autoInjectLandingExists) {
+    database.exec(`
+      CREATE TABLE auto_inject_unmapped (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        payload_json TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'auto_inject',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `)
   }
 
   // Ensure a unique index exists for suggestion fingerprints (dedupe)

@@ -17,11 +17,13 @@ import { CustomEntityTablePage } from './pages/CustomEntityTablePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { DocsPage } from './pages/DocsPage'
 import { AutomationPage } from './pages/AutomationPage'
+import { LandingZonePage } from './pages/LandingZonePage'
 import { DataPage } from './pages/DataPage'
 import { AiPage } from './pages/AiPage'
 import { AiPlanningPage } from './pages/AiPlanningPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { IntegrationsPage } from './pages/IntegrationsPage'
+import { PolicyEnginePage } from './pages/PolicyEnginePage'
 
 /* Inner tree: theme follows color mode from context. */
 function ThemedRoutes() {
@@ -52,6 +54,7 @@ function ThemedRoutes() {
             <Route path="/data" element={<DataPage />} />
             <Route path="/relationships" element={<RelationshipsPage />} />
             <Route path="/graph" element={<GraphPage />} />
+            <Route path="/policy-engine" element={<PolicyEnginePage />} />
             <Route path="/rdf" element={<RdfExportPage />} />
             <Route path="/sparql" element={<SparqlPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
@@ -61,6 +64,7 @@ function ThemedRoutes() {
             <Route path="/mappings" element={<MappingsPage />} />
             <Route path="/docs" element={<DocsPage />} />
             <Route path="/automation" element={<AutomationPage />} />
+            <Route path="/landing-zone" element={<LandingZonePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

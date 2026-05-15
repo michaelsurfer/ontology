@@ -25,6 +25,7 @@ export function AutomationPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [publishResult, setPublishResult] = useState(null)
 
+  const [ingestApiMode, setIngestApiMode] = useState('ingest_events')
   const [testEventJsonText, setTestEventJsonText] = useState(createDefaultTestEventJson())
   const [ingestResult, setIngestResult] = useState(null)
 
@@ -112,7 +113,65 @@ export function AutomationPage() {
         <CardContent>
           <Typography variant="h6">Ingestion API</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Send events to <b>POST /api/ingest/events</b>. This stores raw events and generates draft suggestions.
+            Choose how test traffic is sent. Ingest events drives the suggestion pipeline; auto-inject writes rows
+            directly when payload keys match a custom entity. MCP-inject only validates JSON against guardrails and
+            relationships (no row insert).
+          </Typography>
+
+          <TextField
+            select
+            label="Injection API"
+            value={ingestApiMode}
+            onChange={(event) => {
+              const nextMode = event.target.value
+              setIngestApiMode(nextMode)
+              setTestEventJsonText(getDefaultPayloadForMode(nextMode))
+              setIngestResult(null)
+            }}
+            size="small"
+            sx={{ mt: 2, minWidth: 320 }}
+          >
+            <MenuItem value="ingest_events">
+              Ingest events — POST /api/ingest/events (entity_name + ai_mode, draft suggestions)
+            </MenuItem>
+            <MenuItem value="auto_inject">
+              Auto-inject — POST /api/auto-inject (no entity; routes by column overlap)
+            </MenuItem>
+            <MenuItem value="smart_inject">
+              Smart-inject — POST /api/smart-inject (ontology meaning + reasons per field)
+            </MenuItem>
+            <MenuItem value="mcp_inject">
+              MCP-inject — POST /api/mcp-inject (approval, rules, relationships, reasoning)
+            </MenuItem>
+          </TextField>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            {ingestApiMode === 'ingest_events' ? (
+              <>
+                Uses <b>POST /api/ingest/events</b>. Requires <code>entity_name</code> and <code>ai_mode</code>. Stores
+                raw events and generates draft suggestions below.
+              </>
+            ) : ingestApiMode === 'auto_inject' ? (
+              <>
+                Uses <b>POST /api/auto-inject</b>. Send objects whose keys overlap your Objects schemas; unmatched payloads
+                land in <code>auto_inject_unmapped</code> (see{' '}
+                <Typography component="span" sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}>
+                  GET /api/auto-inject/unmapped
+                </Typography>
+                ).
+              </>
+            ) : ingestApiMode === 'smart_inject' ? (
+              <>
+                Uses <b>POST /api/smart-inject</b>. Reads the incoming JSON and returns each field with business meaning,
+                evidence (reason), and potential ontology relationships/rules from your configured Objects + mappings.
+              </>
+            ) : (
+              <>
+                Uses <b>POST /api/mcp-inject</b>. Send MCP-style <code>{'{ tool, arguments }'}</code> or a plain object of
+                fields. The response includes <code>allowed</code>, evaluated guardrail rules, relevant relationship
+                definitions, and human-readable <code>reasoning</code> (no database writes).
+              </>
+            )}
           </Typography>
 
           <Divider sx={{ my: 2 }} />
@@ -138,6 +197,7 @@ export function AutomationPage() {
               disabled={isLoading}
               onClick={() =>
                 void ingestTestEvent({
+                  ingestApiMode,
                   testEventJsonText,
                   setIngestResult,
                   setErrorMessage,
@@ -149,7 +209,11 @@ export function AutomationPage() {
             >
               Ingest
             </Button>
-            <Button variant="text" color="inherit" onClick={() => setTestEventJsonText(createDefaultTestEventJson())}>
+            <Button
+              variant="text"
+              color="inherit"
+              onClick={() => setTestEventJsonText(getDefaultPayloadForMode(ingestApiMode))}
+            >
               Reset example
             </Button>
           </Box>
@@ -419,8 +483,9 @@ async function deleteDraftSuggestionsAndReload({ setErrorMessage, setIsLoading, 
   }
 }
 
-/* Ingest a test event JSON payload and switch to draft view. */
+/* Send a test payload using the selected ingestion API. */
 async function ingestTestEvent({
+  ingestApiMode,
   testEventJsonText,
   setIngestResult,
   setErrorMessage,
@@ -433,15 +498,26 @@ async function ingestTestEvent({
   setIngestResult(null)
   try {
     const parsed = JSON.parse(String(testEventJsonText || '{}'))
-    const response = await apiClient.post('/ingest/events', parsed)
+    const path =
+      ingestApiMode === 'auto_inject'
+        ? '/auto-inject'
+        : ingestApiMode === 'smart_inject'
+          ? '/smart-inject'
+          : ingestApiMode === 'mcp_inject'
+            ? '/mcp-inject'
+            : '/ingest/events'
+    const response = await apiClient.post(path, parsed)
     setIngestResult(response.data || null)
-    setStatusFilter('draft')
-    await loadSuggestions({
-      statusFilter: 'draft',
-      setSuggestions,
-      setErrorMessage,
-      setIsLoading,
-    })
+
+    if (ingestApiMode === 'ingest_events') {
+      setStatusFilter('draft')
+      await loadSuggestions({
+        statusFilter: 'draft',
+        setSuggestions,
+        setErrorMessage,
+        setIsLoading,
+      })
+    }
   } catch (error) {
     if (error instanceof SyntaxError) {
       setErrorMessage('Invalid JSON in test event')
@@ -451,6 +527,72 @@ async function ingestTestEvent({
   } finally {
     setIsLoading(false)
   }
+}
+
+/* Return a mode-specific default payload for the ingestion demo textbox. */
+function getDefaultPayloadForMode(ingestApiMode) {
+  if (ingestApiMode === 'auto_inject') {
+    return createDefaultAutoInjectJson()
+  }
+  if (ingestApiMode === 'smart_inject') {
+    return createDefaultSmartInjectJson()
+  }
+  if (ingestApiMode === 'mcp_inject') {
+    return createDefaultMcpInjectJson()
+  }
+  return createDefaultTestEventJson()
+}
+
+/* Default JSON for auto-inject (flat keys; align with your Objects for a successful row insert). */
+function createDefaultAutoInjectJson() {
+  return JSON.stringify(
+    {
+      source: 'demo',
+      subject: 'Need help with my order',
+      status: 'open',
+      priority: 'high',
+      requester_email: 'jane.doe@acme.example',
+      order_external_id: 'shopify:order:1001',
+    },
+    null,
+    2,
+  )
+}
+
+/* Default JSON for smart-inject (shows meaning enrichment over real payload fields). */
+function createDefaultSmartInjectJson() {
+  return JSON.stringify(
+    {
+      source: 'demo',
+      entity_name: 'tickets',
+      data: {
+        dueDate: '2026-05-20',
+        priority: 'high',
+        requester_email: 'jane.doe@acme.example',
+        order_external_id: 'shopify:order:1001',
+      },
+    },
+    null,
+    2,
+  )
+}
+
+/* Default JSON for MCP-inject ({ tool, arguments } shape; plain objects also supported). */
+function createDefaultMcpInjectJson() {
+  return JSON.stringify(
+    {
+      tool: 'apply_ticket_update',
+      arguments: {
+        entity_name: 'tickets',
+        subject: 'Need help with my order',
+        status: 'open',
+        priority: 'high',
+        requester_email: 'jane.doe@acme.example',
+      },
+    },
+    null,
+    2,
+  )
 }
 
 /* Create a default ingestion event payload for testing. */

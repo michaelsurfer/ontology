@@ -151,6 +151,22 @@ export function DocsPage() {
               Manage rows stored inside dynamically created SQLite tables.
             </Typography>
           </Stack>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">AI Planning</Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+              GET /api/ai/plan/prompt
+              <br />
+              PUT /api/ai/plan/prompt
+              <br />
+              POST /api/ai/plan
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Planner loop using the NL→SPARQL skill; planner prompt lives in <code>ai_planning_settings</code>.
+            </Typography>
+          </Stack>
         </CardContent>
       </Card>
 
@@ -172,6 +188,23 @@ export function DocsPage() {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Stores raw events and generates draft suggestions (entity creation, fields, relationships, rules).
+            </Typography>
+          </Stack>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Auto-inject (no entity_name / ai_mode)</Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+              POST /api/auto-inject
+              <br />
+              GET /api/auto-inject/unmapped?limit=100
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Sends JSON objects (single object, array, or <code>records</code>). The backend picks the custom entity
+              whose active columns best overlap with payload keys (snake_case or camelCase). Ambiguous or unknown shapes
+              are stored in <code>auto_inject_unmapped</code>. Optional <code>source</code> on the envelope tags landing
+              rows for audit.
             </Typography>
           </Stack>
 

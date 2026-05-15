@@ -19,8 +19,10 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "morgan": "^1.10.1",
+    "multer": "^2.1.1",
     "n3": "^2.0.3",
     "openai": "^6.34.0",
+    "pdf-parse": "^2.4.5",
     "rdf-validate-shacl": "^0.6.5",
     "uuid": "^14.0.0"
   }

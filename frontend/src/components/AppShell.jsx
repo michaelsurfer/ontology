@@ -280,6 +280,7 @@ function getPrimaryNavigationItems() {
     { to: '/custom-entities', label: 'Objects' },
     { to: '/relationships', label: 'Relationships' },
     { to: '/graph', label: 'Context Map' },
+    { to: '/policy-engine', label: 'Policy Engine' },
   ]
 }
 
@@ -291,6 +292,7 @@ function getAdvancedMenuItems() {
     { to: '/rdf', label: 'Standards Export' },
     { to: '/integrations', label: 'Integrations' },
     { to: '/automation', label: 'Ingestion Pipelines' },
+    { to: '/landing-zone', label: 'Landing zone' },
     { to: '/rules', label: 'Guardrails' },
     { to: '/mappings', label: 'Identifiers & Naming' },
   ]

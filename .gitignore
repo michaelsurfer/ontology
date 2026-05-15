@@ -50,5 +50,7 @@ backend/data/
 # Cursor / local tooling
 .cursor/
 
-# Rust (rdf-cache-service)
+# Rust services
 rdf-cache-service/target/
+data-layer-service/target/
+data-layer-service/data/

@@ -70,6 +70,15 @@ import {
   createIngestEvents,
   listIngestEvents,
 } from './ingestStore.js'
+import { listAutoInjectUnmapped, runAutoInject } from './autoInjectStore.js'
+import { runSmartInject } from './smartInjectStore.js'
+import { runMcpInject } from './mcpInjectStore.js'
+import multer from 'multer'
+import {
+  decodePolicyUploadBufferToPlainText,
+  runPolicyDocumentExtract,
+  runPolicyGraphFromPrompt,
+} from './policyEngineStore.js'
 import {
   approveSuggestion,
   deleteSuggestion,
@@ -134,19 +143,115 @@ function startServer() {
 
   const openAiClient = createOpenAiClient()
 
+  const policyEngineUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  })
+
   const app = express()
   app.use(cors())
-  app.use(express.json({ limit: '2mb' }))
+  app.use(express.json({ limit: '4mb' }))
   app.use(morgan('dev'))
 
   app.get('/api/health', (request, response) => {
     response.json({ ok: true })
   })
 
+  /* Policy Engine: ephemeral document extraction + policy graph (no SQLite writes). */
+  app.post('/api/policy-engine/extract', policyEngineUpload.single('file'), async (request, response) => {
+    if (!openAiClient) {
+      response.status(503).json({ error: 'OpenAI is not configured (missing OPENAI_API_KEY)' })
+      return
+    }
+    const uploadedFile = request.file
+    if (!uploadedFile || !uploadedFile.buffer) {
+      response.status(400).json({ error: 'Expected multipart file field named "file"' })
+      return
+    }
+    try {
+      const plainText = await decodePolicyUploadBufferToPlainText({
+        buffer: uploadedFile.buffer,
+        mimeType: uploadedFile.mimetype,
+        fileName: uploadedFile.originalname,
+      })
+      const extraction = await runPolicyDocumentExtract({
+        openAiClient,
+        fileName: uploadedFile.originalname,
+        plainText,
+      })
+      response.json(extraction)
+    } catch (error) {
+      response.status(400).json({
+        error: error?.message ? String(error.message) : 'policy_extract_failed',
+      })
+    }
+  })
+
+  app.post('/api/policy-engine/graph', async (request, response) => {
+    if (!openAiClient) {
+      response.status(503).json({ error: 'OpenAI is not configured (missing OPENAI_API_KEY)' })
+      return
+    }
+    const body = request.body && typeof request.body === 'object' ? request.body : {}
+    const policyPrompt = String(body.policyPrompt || body.policy_prompt || '').trim()
+    const extractions = body.extractions
+    try {
+      const graph = await runPolicyGraphFromPrompt({
+        openAiClient,
+        extractions,
+        policyPrompt,
+      })
+      response.json(graph)
+    } catch (error) {
+      response.status(400).json({
+        error: error?.message ? String(error.message) : 'policy_graph_failed',
+      })
+    }
+  })
+
   // Ingest events (webhook / SDK "front door")
   app.get('/api/ingest/events', (request, response) => {
     const limit = Number.isFinite(Number(request.query.limit)) ? Number(request.query.limit) : 100
     response.json(listIngestEvents({ limit }))
+  })
+
+  app.post('/api/auto-inject', async (request, response) => {
+    try {
+      const result = runAutoInject({ rawBody: request.body })
+      await refreshRustRdfCacheBestEffort()
+      response.status(200).json(result)
+    } catch (error) {
+      response.status(400).json({
+        error: error?.message ? String(error.message) : 'auto_inject_failed',
+      })
+    }
+  })
+
+  app.post('/api/smart-inject', (request, response) => {
+    try {
+      const result = runSmartInject({ rawBody: request.body })
+      response.status(200).json(result)
+    } catch (error) {
+      response.status(400).json({
+        error: error?.message ? String(error.message) : 'smart_inject_failed',
+      })
+    }
+  })
+
+  app.post('/api/mcp-inject', (request, response) => {
+    try {
+      const result = runMcpInject({ rawBody: request.body })
+      response.status(200).json(result)
+    } catch (error) {
+      response.status(400).json({
+        error: error?.message ? String(error.message) : 'mcp_inject_failed',
+      })
+    }
+  })
+
+  app.get('/api/auto-inject/unmapped', (request, response) => {
+    const limit = Number.isFinite(Number(request.query.limit)) ? Number(request.query.limit) : 100
+    response.json(listAutoInjectUnmapped({ limit }))
   })
 
   app.post('/api/ingest/events', async (request, response) => {
@@ -681,8 +786,12 @@ function startServer() {
         maxRowsPerEntity,
       }
 
-      const maxIterationsRaw = safeBody.max_iterations ?? safeBody.maxIterations
-      const maxIterations = Number.isFinite(Number(maxIterationsRaw)) ? Number(maxIterationsRaw) : 5
+      const maxIterationsRaw = safeBody.max_iterations ?? safeBody.maxIterations ?? 5
+      const maxIterationsParsed = Number.parseInt(String(maxIterationsRaw), 10)
+      const maxIterations =
+        Number.isFinite(maxIterationsParsed) && maxIterationsParsed >= 1
+          ? Math.min(maxIterationsParsed, 10)
+          : 5
 
       const result = await runPlanningAgent({
         openAiClient,

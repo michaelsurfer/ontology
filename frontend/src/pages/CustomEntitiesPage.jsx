@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Box,
   Button,
@@ -19,29 +19,27 @@ import {
   TableRow,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import { Link as RouterLink } from 'react-router-dom'
 import { apiClient } from '../api/apiClient'
+import { CreateCustomEntityDialog } from '../components/CreateCustomEntityDialog.jsx'
+import {
+  createEmptyField,
+  getDuplicateFieldNameErrorText,
+  getFieldNameErrorText,
+} from '../customEntities/customEntityFormShared.js'
 import emptyEntitiesIllustrationUrl from '../assets/entities-empty.svg'
 
 /* Allow users to create custom entities (real SQL tables) and browse them. */
 export function CustomEntitiesPage() {
-  const theme = useTheme()
-  const isSmallViewport = useMediaQuery(theme.breakpoints.down('md'))
-
   const [entities, setEntities] = useState([])
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [formData, setFormData] = useState(createEmptyEntityForm())
-  /* When false, display name stays in sync with entity name; set true after user edits display name. */
-  const hasUserCustomizedDisplayNameRef = useRef(false)
 
   const [isFieldsDialogOpen, setIsFieldsDialogOpen] = useState(false)
   const [activeEntity, setActiveEntity] = useState(null)
@@ -50,51 +48,6 @@ export function CustomEntitiesPage() {
   useEffect(() => {
     void loadCustomEntities({ setEntities, setErrorMessage, setIsLoading })
   }, [])
-
-  useEffect(() => {
-    if (!isDialogOpen) {
-      return
-    }
-    const entityName = String(formData.entity_name || '')
-    const displayName = String(formData.display_name || '')
-    hasUserCustomizedDisplayNameRef.current = displayName !== entityName
-  }, [isDialogOpen, formData.entity_name, formData.display_name])
-
-  const canCreate = useMemo(() => {
-    const entityNameErrorText = getEntityNameErrorText({
-      entityName: formData.entity_name,
-      existingEntities: entities,
-    })
-    if (entityNameErrorText) {
-      return false
-    }
-    if (!formData.entity_name.trim()) {
-      return false
-    }
-    if (!formData.display_name.trim()) {
-      return false
-    }
-    if (formData.fields.length === 0) {
-      return false
-    }
-    if (formData.fields.some((field) => !field.field_name.trim())) {
-      return false
-    }
-    if (formData.fields.some((field) => getFieldNameErrorText(field.field_name))) {
-      return false
-    }
-    const fieldNames = formData.fields.map((field) =>
-      String(field.field_name || '').trim().toLowerCase(),
-    )
-    if (new Set(fieldNames).size !== fieldNames.length) {
-      return false
-    }
-    return true
-  }, [formData, entities])
-
-  const entityNameErrorText = useMemo(() => {
-    return getEntityNameErrorText({ entityName: formData.entity_name, existingEntities: entities })
-  }, [formData.entity_name, entities])
 
   return (
     <Stack spacing={2}>
@@ -205,196 +158,15 @@ export function CustomEntitiesPage() {
         </CardContent>
       </Card>
 
-      <Dialog
+      <CreateCustomEntityDialog
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        fullWidth
-        fullScreen={isSmallViewport}
-        maxWidth="lg"
-        scroll="paper"
-        PaperProps={{ sx: { maxHeight: isSmallViewport ? '100%' : '90vh' } }}
-      >
-        <DialogTitle>Create custom entity</DialogTitle>
-        <DialogContent
-          dividers
-          sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}
-        >
-          <TextField
-            label="Entity name (table name)"
-            value={formData.entity_name}
-            onChange={(event) => {
-              const newEntityName = event.target.value
-              setFormData((previous) => ({
-                ...previous,
-                entity_name: newEntityName,
-                display_name: hasUserCustomizedDisplayNameRef.current
-                  ? previous.display_name
-                  : newEntityName,
-              }))
-            }}
-            error={Boolean(entityNameErrorText)}
-            helperText={
-              entityNameErrorText || 'Must match: /^[a-z][a-z0-9_]*$/ (example: "projects")'
-            }
-            required
-          />
-          <TextField
-            label="Display name"
-            value={formData.display_name}
-            onChange={(event) => {
-              hasUserCustomizedDisplayNameRef.current = true
-              setFormData((previous) => ({ ...previous, display_name: event.target.value }))
-            }}
-            required
-          />
-
-          <Divider />
-
-          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              Fields
-            </Typography>
-            <Button
-              startIcon={<AddIcon />}
-              variant="outlined"
-              onClick={() =>
-                setFormData((prev) => ({
-                  ...prev,
-                  fields: [...prev.fields, createEmptyField()],
-                }))
-              }
-            >
-              Add field
-            </Button>
-          </Box>
-
-          <Typography variant="body2" color="text.secondary">
-            System fields are created automatically: <b>id</b> (INTEGER, auto-increment). You do not need to add it and you
-            cannot edit or delete it.
-          </Typography>
-
-          <Stack
-            spacing={1}
-            sx={{
-              maxHeight: isSmallViewport ? 'unset' : 520,
-              overflowY: isSmallViewport ? 'visible' : 'auto',
-              pr: isSmallViewport ? 0 : 1,
-            }}
-          >
-            {formData.fields.map((field, index) => (
-              <Box
-                key={index}
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  gap: 2,
-                  py: 1,
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                }}
-              >
-                <TextField
-                  label="Field name"
-                  value={field.field_name}
-                  onChange={(event) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      fields: prev.fields.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, field_name: event.target.value } : item,
-                      ),
-                    }))
-                  }
-                  sx={{ flex: '1 1 240px' }}
-                  placeholder="example: account_id"
-                  required
-                  error={Boolean(getFieldNameErrorText(field.field_name))}
-                  helperText={
-                    getFieldNameErrorText(field.field_name) ||
-                    'Must match: /^[a-z][a-z0-9_]*$/ (lowercase snake_case)'
-                  }
-                />
-
-                <TextField
-                  select
-                  label="Type"
-                  value={field.field_type}
-                  onChange={(event) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      fields: prev.fields.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, field_type: event.target.value } : item,
-                      ),
-                    }))
-                  }
-                  sx={{ width: 200 }}
-                >
-                  <MenuItem value="TEXT">TEXT</MenuItem>
-                  <MenuItem value="INTEGER">INTEGER</MenuItem>
-                  <MenuItem value="REAL">REAL</MenuItem>
-                </TextField>
-
-                <TextField
-                  select
-                  label="Required"
-                  value={field.is_required ? 'yes' : 'no'}
-                  onChange={(event) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      fields: prev.fields.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, is_required: event.target.value === 'yes' }
-                          : item,
-                      ),
-                    }))
-                  }
-                  sx={{ width: 160 }}
-                >
-                  <MenuItem value="no">No</MenuItem>
-                  <MenuItem value="yes">Yes</MenuItem>
-                </TextField>
-
-                <IconButton
-                  onClick={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      fields: prev.fields.filter((_, itemIndex) => itemIndex !== index),
-                    }))
-                  }
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Box>
-            ))}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setIsDialogOpen(false)
-              setFormData(createEmptyEntityForm())
-            }}
-            color="inherit"
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={!canCreate}
-            onClick={() =>
-              void createEntityAndReload({
-                formData,
-                setEntities,
-                setErrorMessage,
-                setIsLoading,
-                setIsDialogOpen,
-                setFormData,
-              })
-            }
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+        entities={entities}
+        initialFormData={null}
+        onCreated={async () => {
+          await loadCustomEntities({ setEntities, setErrorMessage, setIsLoading })
+        }}
+      />
 
       <Dialog
         open={isFieldsDialogOpen}
@@ -582,79 +354,6 @@ export function CustomEntitiesPage() {
   )
 }
 
-/* Create a blank custom entity form state. */
-function createEmptyEntityForm() {
-  return {
-    entity_name: '',
-    display_name: '',
-    fields: [createEmptyField()],
-  }
-}
-
-/* Create a blank field entry. */
-function createEmptyField() {
-  return {
-    field_name: '',
-    field_type: 'TEXT',
-    is_required: false,
-  }
-}
-
-/* Validate a field/column name using the same rules as the API (snake_case, lowercase). */
-function getFieldNameErrorText(fieldName) {
-  const normalized = String(fieldName || '').trim().toLowerCase()
-  if (!normalized) {
-    return ''
-  }
-
-  const reservedColumns = new Set(['id', 'created_at'])
-  if (reservedColumns.has(normalized)) {
-    return `Field name is reserved: ${normalized}`
-  }
-
-  if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
-    return 'Invalid format. Use: /^[a-z][a-z0-9_]*$/'
-  }
-
-  return ''
-}
-
-/* Ensure a new field name is not already defined on this object. */
-function getDuplicateFieldNameErrorText({ fieldName, existingFields }) {
-  const normalized = String(fieldName || '').trim().toLowerCase()
-  if (!normalized || !/^[a-z][a-z0-9_]*$/.test(normalized)) {
-    return ''
-  }
-
-  const list = Array.isArray(existingFields) ? existingFields : []
-  const exists = list.some((field) => String(field?.field_name || '').trim().toLowerCase() === normalized)
-  if (exists) {
-    return `Field already exists: ${normalized}`
-  }
-
-  return ''
-}
-
-/* Validate the entity name for format and uniqueness against existing entities. */
-function getEntityNameErrorText({ entityName, existingEntities }) {
-  const normalized = String(entityName || '').trim().toLowerCase()
-  if (!normalized) {
-    return ''
-  }
-
-  if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
-    return 'Invalid format. Use: /^[a-z][a-z0-9_]*$/'
-  }
-
-  const list = Array.isArray(existingEntities) ? existingEntities : []
-  const exists = list.some((entity) => String(entity?.entity_name || '').trim().toLowerCase() === normalized)
-  if (exists) {
-    return `Entity name already exists: ${normalized}`
-  }
-
-  return ''
-}
-
 /* Fetch all custom entities from backend. */
 async function loadCustomEntities({ setEntities, setErrorMessage, setIsLoading }) {
   setIsLoading(true)
@@ -662,29 +361,6 @@ async function loadCustomEntities({ setEntities, setErrorMessage, setIsLoading }
   try {
     const response = await apiClient.get('/custom-entities')
     setEntities(Array.isArray(response.data) ? response.data : [])
-  } catch (error) {
-    setErrorMessage(getErrorMessage(error))
-  } finally {
-    setIsLoading(false)
-  }
-}
-
-/* Create an entity then reload list. */
-async function createEntityAndReload({
-  formData,
-  setEntities,
-  setErrorMessage,
-  setIsLoading,
-  setIsDialogOpen,
-  setFormData,
-}) {
-  setIsLoading(true)
-  setErrorMessage('')
-  try {
-    await apiClient.post('/custom-entities', formData)
-    await loadCustomEntities({ setEntities, setErrorMessage, setIsLoading })
-    setIsDialogOpen(false)
-    setFormData(createEmptyEntityForm())
   } catch (error) {
     setErrorMessage(getErrorMessage(error))
   } finally {
