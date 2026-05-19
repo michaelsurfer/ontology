@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ontology": {
+      "command": "node",
+      "args": ["/absolute/path/to/ontology/mcp-service/dist/index.js"],
+      "env": {
+        "DATA_LAYER_URL": "http://127.0.0.1:8182",
+        "RDF_CACHE_URL": "http://127.0.0.1:8181"
+      }
+    }
+  }
+}

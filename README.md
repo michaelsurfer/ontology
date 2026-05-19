@@ -6,6 +6,9 @@ This repo is an ontology / context-layer MVP: custom entities in SQLite, OWL-sty
 
 - **Node backend** (`backend/`): Express API, SQLite, RDF export (`createRdfTurtleExport`), schema graph for the UI, AI chat / planning. After writes that affect the graph, it **refreshes** the Rust cache (best effort).
 - **Rust service** (`rdf-cache-service/`): In-memory Turtle cache plus **SPARQL SELECT** via **Oxigraph**. The backend’s `/api/sparql` and AI SPARQL path call this service.
+- **Rust data layer** (`data-layer-service/`): LMDB-backed entities, rows, relationships, Turtle export (port `8182`).
+- **MCP server** (`mcp-service/`): TypeScript stdio MCP for Cursor/agents → data-layer + rdf-cache (see `mcp-service/README.md`).
+- **Dashboard** (`dashboard/`): TypeScript admin UI for data-layer (port `5183`).
 - **React frontend** (`frontend/`): Objects, relationships, mappings, rules, graph view, Query Studio.
 
 The **context map** (schema graph) is served from the Node API (`GET /api/graph/schema`) and does **not** require Rust. **SPARQL / Query Studio** expects the Rust service to be running.

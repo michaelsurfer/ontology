@@ -1,7 +1,9 @@
 use crate::models::{
-    CreateEntityFieldRequest, CreateEntityRequest, CreateEntityRowRequest, CreateRelationshipRequest,
-    EntityDefinition, EntityFieldDefinition, EntityRowRecord, EntitySummary, RelationshipRecord,
-    UpdateEntityRequest, UpdateEntityRowRequest, UpdateRelationshipRequest,
+    CreateEntityFieldRequest, CreateEntityRelationshipRequest, CreateEntityRequest,
+    CreateEntityRowRequest, CreateRelationshipRequest, EntityDefinition, EntityFieldDefinition,
+    EntityRelationshipDefinition, EntityRowRecord, EntitySummary, RelationshipRecord,
+    UpdateEntityRelationshipRequest, UpdateEntityRequest, UpdateEntityRowRequest,
+    UpdateRelationshipRequest,
 };
 use heed::types::{Bytes, Str};
 use heed::{Database, Env, EnvOpenOptions, RwTxn};
@@ -16,13 +18,21 @@ const ENTITY_NAME_PREFIX: &str = "entity/name/";
 const ENTITY_DEF_PREFIX: &str = "entity/def/";
 const ENTITY_ROW_COUNTER_PREFIX: &str = "entity/row_counter/";
 const ENTITY_ROW_PREFIX: &str = "entity/row/";
-const RELATIONSHIP_DEF_PREFIX: &str = "relationship/def/";
+const RELATIONSHIP_LINK_PREFIX: &str = "relationship/link/";
+const ENTITY_RELATIONSHIP_DEF_PREFIX: &str = "entity_relationship/def/";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct MetaCounters {
     next_entity_id: u64,
     next_relationship_id: u64,
     next_entity_field_id: u64,
+    #[serde(default = "default_counter_seed")]
+    next_entity_relationship_id: u64,
+}
+
+// Default counter seed for LMDB meta written before entity-relationship support existed.
+fn default_counter_seed() -> u64 {
+    1
 }
 
 #[derive(Debug, Error)]
@@ -281,6 +291,238 @@ impl DataStore {
         Ok(rows)
     }
 
+    // Delete one row and any relationship links that reference it.
+    pub fn delete_entity_row(&self, entity_id: u64, row_id: u64) -> Result<(), StoreError> {
+        let mut write_transaction = self.begin_write_transaction()?;
+        if self
+            .read_entity_row(&write_transaction, entity_id, row_id)?
+            .is_none()
+        {
+            return Err(StoreError::NotFound(format!(
+                "Row not found: entity={entity_id} row={row_id}"
+            )));
+        }
+
+        let key = format!("{ENTITY_ROW_PREFIX}{entity_id}/{row_id}");
+        self.db
+            .delete(&mut write_transaction, &key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        self.delete_relationship_links_for_row(&mut write_transaction, entity_id, row_id)?;
+
+        write_transaction
+            .commit()
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        Ok(())
+    }
+
+    // Delete an entity, all its rows, and relationships that reference it.
+    pub fn delete_entity(&self, entity_id: u64) -> Result<(), StoreError> {
+        let mut write_transaction = self.begin_write_transaction()?;
+        let entity_definition = self
+            .read_entity_definition(&write_transaction, entity_id)?
+            .ok_or_else(|| StoreError::NotFound(format!("Entity not found: {entity_id}")))?;
+
+        let row_prefix = format!("{ENTITY_ROW_PREFIX}{entity_id}/");
+        let row_keys = {
+            let mut collected_keys = Vec::new();
+            let mut cursor = self
+                .db
+                .prefix_iter(&write_transaction, &row_prefix)
+                .map_err(|error| StoreError::Storage(error.to_string()))?;
+            while let Some((key, _value_bytes)) = cursor
+                .next()
+                .transpose()
+                .map_err(|error| StoreError::Storage(error.to_string()))?
+            {
+                collected_keys.push(key.to_string());
+            }
+            collected_keys
+        };
+        for row_key in row_keys {
+            self.db
+                .delete(&mut write_transaction, &row_key)
+                .map_err(|error| StoreError::Storage(error.to_string()))?;
+        }
+
+        let entity_def_key = format!("{ENTITY_DEF_PREFIX}{entity_id}");
+        self.db
+            .delete(&mut write_transaction, &entity_def_key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        self.delete_entity_name_index(&mut write_transaction, &entity_definition.name)?;
+
+        let row_counter_key = format!("{ENTITY_ROW_COUNTER_PREFIX}{entity_id}");
+        self.db
+            .delete(&mut write_transaction, &row_counter_key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        self.delete_relationship_links_for_entity(&mut write_transaction, entity_id)?;
+        self.delete_entity_relationships_for_entity(&mut write_transaction, entity_id)?;
+
+        write_transaction
+            .commit()
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        Ok(())
+    }
+
+    // Define a schema-level relationship between two entity types (no row data).
+    pub fn create_entity_relationship(
+        &self,
+        request: CreateEntityRelationshipRequest,
+    ) -> Result<EntityRelationshipDefinition, StoreError> {
+        let relationship_name = normalize_relationship_name(&request.relationship_name)?;
+
+        let mut write_transaction = self.begin_write_transaction()?;
+        self.ensure_entity_exists(&write_transaction, request.subject_entity_id)?;
+        self.ensure_entity_exists(&write_transaction, request.object_entity_id)?;
+
+        if self.entity_relationship_exists(
+            &write_transaction,
+            request.subject_entity_id,
+            request.object_entity_id,
+            &relationship_name,
+            None,
+        )? {
+            return Err(StoreError::BadRequest(format!(
+                "Entity relationship already exists: {relationship_name} (subject_entity_id={}, object_entity_id={})",
+                request.subject_entity_id, request.object_entity_id
+            )));
+        }
+
+        let mut counters = self.read_counters(&write_transaction)?;
+        let entity_relationship_id = counters.next_entity_relationship_id;
+        counters.next_entity_relationship_id = counters.next_entity_relationship_id.saturating_add(1);
+
+        let entity_relationship = EntityRelationshipDefinition {
+            id: entity_relationship_id,
+            relationship_name,
+            subject_entity_id: request.subject_entity_id,
+            object_entity_id: request.object_entity_id,
+            created_at_ms: current_time_ms()?,
+        };
+
+        self.write_entity_relationship(&mut write_transaction, &entity_relationship)?;
+        self.write_counters(&mut write_transaction, &counters)?;
+        write_transaction
+            .commit()
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        Ok(entity_relationship)
+    }
+
+    // Update an entity-level relationship definition.
+    pub fn update_entity_relationship(
+        &self,
+        entity_relationship_id: u64,
+        request: UpdateEntityRelationshipRequest,
+    ) -> Result<EntityRelationshipDefinition, StoreError> {
+        let mut write_transaction = self.begin_write_transaction()?;
+        let mut entity_relationship = self
+            .read_entity_relationship(&write_transaction, entity_relationship_id)?
+            .ok_or_else(|| {
+                StoreError::NotFound(format!(
+                    "Entity relationship not found: {entity_relationship_id}"
+                ))
+            })?;
+
+        if let Some(relationship_name_raw) = request.relationship_name {
+            entity_relationship.relationship_name =
+                normalize_relationship_name(&relationship_name_raw)?;
+        }
+
+        let next_subject_entity_id = request
+            .subject_entity_id
+            .unwrap_or(entity_relationship.subject_entity_id);
+        let next_object_entity_id = request
+            .object_entity_id
+            .unwrap_or(entity_relationship.object_entity_id);
+
+        self.ensure_entity_exists(&write_transaction, next_subject_entity_id)?;
+        self.ensure_entity_exists(&write_transaction, next_object_entity_id)?;
+
+        if self.entity_relationship_exists(
+            &write_transaction,
+            next_subject_entity_id,
+            next_object_entity_id,
+            &entity_relationship.relationship_name,
+            Some(entity_relationship_id),
+        )? {
+            return Err(StoreError::BadRequest(
+                "Another entity relationship already uses this name between those entities"
+                    .to_string(),
+            ));
+        }
+
+        entity_relationship.subject_entity_id = next_subject_entity_id;
+        entity_relationship.object_entity_id = next_object_entity_id;
+
+        self.write_entity_relationship(&mut write_transaction, &entity_relationship)?;
+        write_transaction
+            .commit()
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        Ok(entity_relationship)
+    }
+
+    // Return all entity-level relationship definitions.
+    pub fn list_entity_relationships(&self) -> Result<Vec<EntityRelationshipDefinition>, StoreError> {
+        let read_transaction = self.begin_read_transaction()?;
+        let mut entity_relationships = Vec::new();
+
+        let mut cursor = self
+            .db
+            .prefix_iter(&read_transaction, ENTITY_RELATIONSHIP_DEF_PREFIX)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        while let Some((_key, value_bytes)) = cursor
+            .next()
+            .transpose()
+            .map_err(|error| StoreError::Storage(error.to_string()))?
+        {
+            let entity_relationship: EntityRelationshipDefinition = decode_json(value_bytes)?;
+            entity_relationships.push(entity_relationship);
+        }
+
+        entity_relationships.sort_by(|left, right| left.id.cmp(&right.id));
+        Ok(entity_relationships)
+    }
+
+    // Fetch one entity-level relationship definition by id.
+    pub fn get_entity_relationship(
+        &self,
+        entity_relationship_id: u64,
+    ) -> Result<EntityRelationshipDefinition, StoreError> {
+        let read_transaction = self.begin_read_transaction()?;
+        self.read_entity_relationship(&read_transaction, entity_relationship_id)?
+            .ok_or_else(|| {
+                StoreError::NotFound(format!(
+                    "Entity relationship not found: {entity_relationship_id}"
+                ))
+            })
+    }
+
+    // Delete an entity-level relationship definition.
+    pub fn delete_entity_relationship(&self, entity_relationship_id: u64) -> Result<(), StoreError> {
+        let mut write_transaction = self.begin_write_transaction()?;
+        if self
+            .read_entity_relationship(&write_transaction, entity_relationship_id)?
+            .is_none()
+        {
+            return Err(StoreError::NotFound(format!(
+                "Entity relationship not found: {entity_relationship_id}"
+            )));
+        }
+
+        let key = format!("{ENTITY_RELATIONSHIP_DEF_PREFIX}{entity_relationship_id}");
+        self.db
+            .delete(&mut write_transaction, &key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        write_transaction
+            .commit()
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        Ok(())
+    }
+
     // Create a relationship link between two entity rows.
     pub fn create_relationship(
         &self,
@@ -382,6 +624,32 @@ impl DataStore {
         Ok(relationship_record)
     }
 
+    // Delete a row-level relationship link.
+    pub fn delete_relationship(&self, relationship_id: u64) -> Result<(), StoreError> {
+        let mut write_transaction = self.begin_write_transaction()?;
+        if self
+            .read_relationship(&write_transaction, relationship_id)?
+            .is_none()
+        {
+            return Err(StoreError::NotFound(format!(
+                "Relationship not found: {relationship_id}"
+            )));
+        }
+
+        let link_key = format!("{RELATIONSHIP_LINK_PREFIX}{relationship_id}");
+        self.db
+            .delete(&mut write_transaction, &link_key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        let legacy_key = format!("relationship/def/{relationship_id}");
+        let _ = self.db.delete(&mut write_transaction, &legacy_key);
+
+        write_transaction
+            .commit()
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        Ok(())
+    }
+
     // Return all relationship records.
     pub fn list_relationships(&self) -> Result<Vec<RelationshipRecord>, StoreError> {
         let read_transaction = self.begin_read_transaction()?;
@@ -389,7 +657,7 @@ impl DataStore {
 
         let mut cursor = self
             .db
-            .prefix_iter(&read_transaction, RELATIONSHIP_DEF_PREFIX)
+            .prefix_iter(&read_transaction, RELATIONSHIP_LINK_PREFIX)
             .map_err(|error| StoreError::Storage(error.to_string()))?;
 
         while let Some((_key, value_bytes)) = cursor
@@ -401,8 +669,124 @@ impl DataStore {
             relationships.push(relationship_record);
         }
 
+        // Support databases written before the link key prefix was renamed.
+        let mut legacy_cursor = self
+            .db
+            .prefix_iter(&read_transaction, "relationship/def/")
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        while let Some((_key, value_bytes)) = legacy_cursor
+            .next()
+            .transpose()
+            .map_err(|error| StoreError::Storage(error.to_string()))?
+        {
+            let relationship_record: RelationshipRecord = decode_json(value_bytes)?;
+            if !relationships.iter().any(|existing| existing.id == relationship_record.id) {
+                relationships.push(relationship_record);
+            }
+        }
+
         relationships.sort_by(|left, right| left.id.cmp(&right.id));
         Ok(relationships)
+    }
+
+    // Load every entity definition (full schema rows).
+    pub fn list_entity_definitions(&self) -> Result<Vec<EntityDefinition>, StoreError> {
+        let read_transaction = self.begin_read_transaction()?;
+        let mut entity_definitions = Vec::new();
+
+        let mut cursor = self
+            .db
+            .prefix_iter(&read_transaction, ENTITY_DEF_PREFIX)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        while let Some((_key, value_bytes)) = cursor
+            .next()
+            .transpose()
+            .map_err(|error| StoreError::Storage(error.to_string()))?
+        {
+            let entity_definition: EntityDefinition = decode_json(value_bytes)?;
+            entity_definitions.push(entity_definition);
+        }
+
+        entity_definitions.sort_by(|left, right| left.id.cmp(&right.id));
+        Ok(entity_definitions)
+    }
+
+    // Grow entity scope using schema relationships and instance links.
+    pub fn expand_entity_scope_full(
+        &self,
+        seed_entity_ids: &[u64],
+    ) -> Result<
+        (
+            std::collections::HashSet<u64>,
+            Vec<RelationshipRecord>,
+            Vec<EntityRelationshipDefinition>,
+        ),
+        StoreError,
+    > {
+        use std::collections::HashSet;
+
+        if seed_entity_ids.is_empty() {
+            return Ok((HashSet::new(), Vec::new(), Vec::new()));
+        }
+
+        let all_relationship_links = self.list_relationships()?;
+        let all_entity_relationships = self.list_entity_relationships()?;
+        let mut entity_scope: HashSet<u64> = seed_entity_ids.iter().copied().collect();
+
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for entity_relationship in &all_entity_relationships {
+                let touches_scope = entity_scope.contains(&entity_relationship.subject_entity_id)
+                    || entity_scope.contains(&entity_relationship.object_entity_id);
+                if !touches_scope {
+                    continue;
+                }
+                if entity_scope.insert(entity_relationship.subject_entity_id) {
+                    changed = true;
+                }
+                if entity_scope.insert(entity_relationship.object_entity_id) {
+                    changed = true;
+                }
+            }
+            for relationship_link in &all_relationship_links {
+                let touches_scope = entity_scope.contains(&relationship_link.subject_entity_id)
+                    || entity_scope.contains(&relationship_link.object_entity_id);
+                if !touches_scope {
+                    continue;
+                }
+                if entity_scope.insert(relationship_link.subject_entity_id) {
+                    changed = true;
+                }
+                if entity_scope.insert(relationship_link.object_entity_id) {
+                    changed = true;
+                }
+            }
+        }
+
+        let entity_relationships_in_scope: Vec<EntityRelationshipDefinition> = all_entity_relationships
+            .into_iter()
+            .filter(|entity_relationship| {
+                entity_scope.contains(&entity_relationship.subject_entity_id)
+                    && entity_scope.contains(&entity_relationship.object_entity_id)
+            })
+            .collect();
+
+        let relationship_links_in_scope: Vec<RelationshipRecord> = all_relationship_links
+            .into_iter()
+            .filter(|relationship_link| {
+                entity_scope.contains(&relationship_link.subject_entity_id)
+                    || entity_scope.contains(&relationship_link.object_entity_id)
+            })
+            .collect();
+
+        Ok((
+            entity_scope,
+            relationship_links_in_scope,
+            entity_relationships_in_scope,
+        ))
     }
 
     fn begin_read_transaction(&self) -> Result<heed::RoTxn, StoreError> {
@@ -431,6 +815,7 @@ impl DataStore {
             next_entity_id: 1,
             next_relationship_id: 1,
             next_entity_field_id: 1,
+            next_entity_relationship_id: 1,
         })
     }
 
@@ -573,7 +958,7 @@ impl DataStore {
         transaction: &mut RwTxn,
         relationship_record: &RelationshipRecord,
     ) -> Result<(), StoreError> {
-        let key = format!("{RELATIONSHIP_DEF_PREFIX}{}", relationship_record.id);
+        let key = format!("{RELATIONSHIP_LINK_PREFIX}{}", relationship_record.id);
         let encoded = encode_json(relationship_record)?;
         self.db
             .put(transaction, &key, &encoded)
@@ -585,7 +970,45 @@ impl DataStore {
         transaction: &heed::RoTxn,
         relationship_id: u64,
     ) -> Result<Option<RelationshipRecord>, StoreError> {
-        let key = format!("{RELATIONSHIP_DEF_PREFIX}{relationship_id}");
+        let link_key = format!("{RELATIONSHIP_LINK_PREFIX}{relationship_id}");
+        if let Some(bytes) = self
+            .db
+            .get(transaction, &link_key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?
+        {
+            return decode_json(bytes);
+        }
+
+        let legacy_key = format!("relationship/def/{relationship_id}");
+        let maybe_bytes = self
+            .db
+            .get(transaction, &legacy_key)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        if let Some(bytes) = maybe_bytes {
+            return decode_json(bytes);
+        }
+        Ok(None)
+    }
+
+    fn write_entity_relationship(
+        &self,
+        transaction: &mut RwTxn,
+        entity_relationship: &EntityRelationshipDefinition,
+    ) -> Result<(), StoreError> {
+        let key = format!("{ENTITY_RELATIONSHIP_DEF_PREFIX}{}", entity_relationship.id);
+        let encoded = encode_json(entity_relationship)?;
+        self.db
+            .put(transaction, &key, &encoded)
+            .map_err(|error| StoreError::Storage(error.to_string()))
+    }
+
+    fn read_entity_relationship(
+        &self,
+        transaction: &heed::RoTxn,
+        entity_relationship_id: u64,
+    ) -> Result<Option<EntityRelationshipDefinition>, StoreError> {
+        let key = format!("{ENTITY_RELATIONSHIP_DEF_PREFIX}{entity_relationship_id}");
         let maybe_bytes = self
             .db
             .get(transaction, &key)
@@ -595,6 +1018,138 @@ impl DataStore {
             return decode_json(bytes);
         }
         Ok(None)
+    }
+
+    fn delete_relationship_links_for_row(
+        &self,
+        transaction: &mut RwTxn,
+        entity_id: u64,
+        row_id: u64,
+    ) -> Result<(), StoreError> {
+        let relationship_links = self.list_relationships_in_transaction(transaction)?;
+        for relationship_link in relationship_links {
+            let touches_row = (relationship_link.subject_entity_id == entity_id
+                && relationship_link.subject_row_id == row_id)
+                || (relationship_link.object_entity_id == entity_id
+                    && relationship_link.object_row_id == row_id);
+            if !touches_row {
+                continue;
+            }
+            let link_key = format!("{RELATIONSHIP_LINK_PREFIX}{}", relationship_link.id);
+            self.db
+                .delete(transaction, &link_key)
+                .map_err(|error| StoreError::Storage(error.to_string()))?;
+            let legacy_key = format!("relationship/def/{}", relationship_link.id);
+            let _ = self.db.delete(transaction, &legacy_key);
+        }
+        Ok(())
+    }
+
+    fn delete_relationship_links_for_entity(
+        &self,
+        transaction: &mut RwTxn,
+        entity_id: u64,
+    ) -> Result<(), StoreError> {
+        let relationship_links = self.list_relationships_in_transaction(transaction)?;
+        for relationship_link in relationship_links {
+            if relationship_link.subject_entity_id != entity_id
+                && relationship_link.object_entity_id != entity_id
+            {
+                continue;
+            }
+            let link_key = format!("{RELATIONSHIP_LINK_PREFIX}{}", relationship_link.id);
+            self.db
+                .delete(transaction, &link_key)
+                .map_err(|error| StoreError::Storage(error.to_string()))?;
+            let legacy_key = format!("relationship/def/{}", relationship_link.id);
+            let _ = self.db.delete(transaction, &legacy_key);
+        }
+        Ok(())
+    }
+
+    fn delete_entity_relationships_for_entity(
+        &self,
+        transaction: &mut RwTxn,
+        entity_id: u64,
+    ) -> Result<(), StoreError> {
+        let keys_to_delete = {
+            let mut collected_keys = Vec::new();
+            let mut cursor = self
+                .db
+                .prefix_iter(transaction, ENTITY_RELATIONSHIP_DEF_PREFIX)
+                .map_err(|error| StoreError::Storage(error.to_string()))?;
+            while let Some((key, value_bytes)) = cursor
+                .next()
+                .transpose()
+                .map_err(|error| StoreError::Storage(error.to_string()))?
+            {
+                let entity_relationship: EntityRelationshipDefinition = decode_json(value_bytes)?;
+                if entity_relationship.subject_entity_id == entity_id
+                    || entity_relationship.object_entity_id == entity_id
+                {
+                    collected_keys.push(key.to_string());
+                }
+            }
+            collected_keys
+        };
+        for key in keys_to_delete {
+            self.db
+                .delete(transaction, &key)
+                .map_err(|error| StoreError::Storage(error.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn list_relationships_in_transaction(
+        &self,
+        transaction: &heed::RoTxn,
+    ) -> Result<Vec<RelationshipRecord>, StoreError> {
+        let mut relationships = Vec::new();
+        let mut cursor = self
+            .db
+            .prefix_iter(transaction, RELATIONSHIP_LINK_PREFIX)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+        while let Some((_key, value_bytes)) = cursor
+            .next()
+            .transpose()
+            .map_err(|error| StoreError::Storage(error.to_string()))?
+        {
+            let relationship_record: RelationshipRecord = decode_json(value_bytes)?;
+            relationships.push(relationship_record);
+        }
+        Ok(relationships)
+    }
+
+    fn entity_relationship_exists(
+        &self,
+        transaction: &RwTxn,
+        subject_entity_id: u64,
+        object_entity_id: u64,
+        relationship_name: &str,
+        exclude_id: Option<u64>,
+    ) -> Result<bool, StoreError> {
+        let mut cursor = self
+            .db
+            .prefix_iter(transaction, ENTITY_RELATIONSHIP_DEF_PREFIX)
+            .map_err(|error| StoreError::Storage(error.to_string()))?;
+
+        while let Some((_key, value_bytes)) = cursor
+            .next()
+            .transpose()
+            .map_err(|error| StoreError::Storage(error.to_string()))?
+        {
+            let entity_relationship: EntityRelationshipDefinition = decode_json(value_bytes)?;
+            if exclude_id == Some(entity_relationship.id) {
+                continue;
+            }
+            if entity_relationship.subject_entity_id == subject_entity_id
+                && entity_relationship.object_entity_id == object_entity_id
+                && entity_relationship.relationship_name == relationship_name
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn ensure_entity_exists(&self, transaction: &RwTxn, entity_id: u64) -> Result<(), StoreError> {

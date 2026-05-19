@@ -1,15 +1,19 @@
 mod models;
 mod store;
+mod turtle_export;
 
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::StatusCode,
-    routing::{get, put},
+    http::{header, StatusCode},
+    response::Response,
+    routing::{get, post, put},
     Json, Router,
 };
 use models::{
-    CreateEntityRequest, CreateEntityRowRequest, CreateRelationshipRequest, UpdateEntityRequest,
-    UpdateEntityRowRequest, UpdateRelationshipRequest,
+    CreateEntityRelationshipRequest, CreateEntityRequest, CreateEntityRowRequest,
+    CreateRelationshipRequest, TurtleExportRequest, UpdateEntityRelationshipRequest,
+    UpdateEntityRequest, UpdateEntityRowRequest, UpdateRelationshipRequest,
 };
 use serde::Serialize;
 use std::env;
@@ -84,7 +88,9 @@ fn build_router(state: AppState) -> Router {
         .route("/entities", get(list_entities_handler).post(create_entity_handler))
         .route(
             "/entities/:entity_id",
-            get(get_entity_handler).put(update_entity_handler),
+            get(get_entity_handler)
+                .put(update_entity_handler)
+                .delete(delete_entity_handler),
         )
         .route(
             "/entities/:entity_id/data",
@@ -92,7 +98,17 @@ fn build_router(state: AppState) -> Router {
         )
         .route(
             "/entities/:entity_id/data/:row_id",
-            put(update_entity_row_handler),
+            put(update_entity_row_handler).delete(delete_entity_row_handler),
+        )
+        .route(
+            "/entity-relationships",
+            get(list_entity_relationships_handler).post(create_entity_relationship_handler),
+        )
+        .route(
+            "/entity-relationships/:entity_relationship_id",
+            get(get_entity_relationship_handler)
+                .put(update_entity_relationship_handler)
+                .delete(delete_entity_relationship_handler),
         )
         .route(
             "/relationships",
@@ -100,8 +116,9 @@ fn build_router(state: AppState) -> Router {
         )
         .route(
             "/relationships/:relationship_id",
-            put(update_relationship_handler),
+            put(update_relationship_handler).delete(delete_relationship_handler),
         )
+        .route("/rdf/turtle", post(export_rdf_turtle_handler))
         .with_state(state)
 }
 
@@ -201,6 +218,39 @@ async fn create_entity_row_handler(
         .map_err(map_store_error)
 }
 
+// DELETE /entities/:entity_id — remove entity schema, rows, and related relationship records.
+async fn delete_entity_handler(
+    State(state): State<AppState>,
+    Path(entity_id_raw): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorBody>)> {
+    let entity_id = parse_id_param(&entity_id_raw, "entity_id")?;
+    state
+        .store
+        .delete_entity(entity_id)
+        .map(|_| Json(serde_json::json!({ "ok": true, "deleted_entity_id": entity_id })))
+        .map_err(map_store_error)
+}
+
+// DELETE /entities/:entity_id/data/:row_id — remove one row and touching link records.
+async fn delete_entity_row_handler(
+    State(state): State<AppState>,
+    Path((entity_id_raw, row_id_raw)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorBody>)> {
+    let entity_id = parse_id_param(&entity_id_raw, "entity_id")?;
+    let row_id = parse_id_param(&row_id_raw, "row_id")?;
+    state
+        .store
+        .delete_entity_row(entity_id, row_id)
+        .map(|_| {
+            Json(serde_json::json!({
+                "ok": true,
+                "deleted_entity_id": entity_id,
+                "deleted_row_id": row_id
+            }))
+        })
+        .map_err(map_store_error)
+}
+
 // PUT /entities/:entity_id/data/:row_id — update a row.
 async fn update_entity_row_handler(
     State(state): State<AppState>,
@@ -216,7 +266,78 @@ async fn update_entity_row_handler(
         .map_err(map_store_error)
 }
 
-// POST /relationships — create a relationship link.
+// POST /entity-relationships — define a relationship between two entity types (schema only).
+async fn create_entity_relationship_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateEntityRelationshipRequest>,
+) -> Result<Json<models::EntityRelationshipDefinition>, (StatusCode, Json<ErrorBody>)> {
+    state
+        .store
+        .create_entity_relationship(payload)
+        .map(Json)
+        .map_err(map_store_error)
+}
+
+// GET /entity-relationships/:entity_relationship_id — fetch one entity relationship definition.
+async fn get_entity_relationship_handler(
+    State(state): State<AppState>,
+    Path(entity_relationship_id_raw): Path<String>,
+) -> Result<Json<models::EntityRelationshipDefinition>, (StatusCode, Json<ErrorBody>)> {
+    let entity_relationship_id =
+        parse_id_param(&entity_relationship_id_raw, "entity_relationship_id")?;
+    state
+        .store
+        .get_entity_relationship(entity_relationship_id)
+        .map(Json)
+        .map_err(map_store_error)
+}
+
+// DELETE /entity-relationships/:entity_relationship_id — remove schema relationship.
+async fn delete_entity_relationship_handler(
+    State(state): State<AppState>,
+    Path(entity_relationship_id_raw): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorBody>)> {
+    let entity_relationship_id =
+        parse_id_param(&entity_relationship_id_raw, "entity_relationship_id")?;
+    state
+        .store
+        .delete_entity_relationship(entity_relationship_id)
+        .map(|_| {
+            Json(serde_json::json!({
+                "ok": true,
+                "deleted_entity_relationship_id": entity_relationship_id
+            }))
+        })
+        .map_err(map_store_error)
+}
+
+// PUT /entity-relationships/:entity_relationship_id — update entity relationship definition.
+async fn update_entity_relationship_handler(
+    State(state): State<AppState>,
+    Path(entity_relationship_id_raw): Path<String>,
+    Json(payload): Json<UpdateEntityRelationshipRequest>,
+) -> Result<Json<models::EntityRelationshipDefinition>, (StatusCode, Json<ErrorBody>)> {
+    let entity_relationship_id =
+        parse_id_param(&entity_relationship_id_raw, "entity_relationship_id")?;
+    state
+        .store
+        .update_entity_relationship(entity_relationship_id, payload)
+        .map(Json)
+        .map_err(map_store_error)
+}
+
+// GET /entity-relationships — list entity-level relationship definitions.
+async fn list_entity_relationships_handler(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<models::EntityRelationshipDefinition>>, (StatusCode, Json<ErrorBody>)> {
+    state
+        .store
+        .list_entity_relationships()
+        .map(Json)
+        .map_err(map_store_error)
+}
+
+// POST /relationships — create a row-level relationship link.
 async fn create_relationship_handler(
     State(state): State<AppState>,
     Json(payload): Json<CreateRelationshipRequest>,
@@ -225,6 +346,19 @@ async fn create_relationship_handler(
         .store
         .create_relationship(payload)
         .map(Json)
+        .map_err(map_store_error)
+}
+
+// DELETE /relationships/:relationship_id — remove a row-level link.
+async fn delete_relationship_handler(
+    State(state): State<AppState>,
+    Path(relationship_id_raw): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorBody>)> {
+    let relationship_id = parse_id_param(&relationship_id_raw, "relationship_id")?;
+    state
+        .store
+        .delete_relationship(relationship_id)
+        .map(|_| Json(serde_json::json!({ "ok": true, "deleted_relationship_id": relationship_id })))
         .map_err(map_store_error)
 }
 
@@ -251,4 +385,26 @@ async fn list_relationships_handler(
         .list_relationships()
         .map(Json)
         .map_err(map_store_error)
+}
+
+// POST /rdf/turtle — export RDF Turtle from LMDB (all entities or a scoped subgraph).
+async fn export_rdf_turtle_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<TurtleExportRequest>,
+) -> Result<Response, (StatusCode, Json<ErrorBody>)> {
+    match turtle_export::turtle_from_lmdb(&state.store, &payload) {
+        Ok(turtle_text) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/turtle; charset=utf-8")
+            .body(Body::from(turtle_text))
+            .map_err(|error| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorBody {
+                        error: error.to_string(),
+                    }),
+                )
+            }),
+        Err(store_error) => Err(map_store_error(store_error)),
+    }
 }

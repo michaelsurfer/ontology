@@ -169,8 +169,26 @@ async function main() {
     console.log("  row", created.id, created.values);
   }
 
+  const entityRelationships = await sendJson("GET", "/entity-relationships");
+  const hasWorksAt = entityRelationships.some(
+    (definition) =>
+      definition.relationship_name === "works_at" &&
+      definition.subject_entity_id === employeeEntityId &&
+      definition.object_entity_id === corporationEntityId,
+  );
+  if (!hasWorksAt) {
+    await sendJson("POST", "/entity-relationships", {
+      relationship_name: "works_at",
+      subject_entity_id: employeeEntityId,
+      object_entity_id: corporationEntityId,
+    });
+    console.log("Defined entity relationship: employee works_at corporation");
+  } else {
+    console.log("Entity relationship employee works_at corporation already exists");
+  }
+
   const relationshipCount = 3 + Math.floor(Math.random() * 3);
-  console.log(`Creating ${relationshipCount} random employee → corporation links`);
+  console.log(`Creating ${relationshipCount} random employee → corporation row links`);
 
   for (let relationshipIndex = 0; relationshipIndex < relationshipCount; relationshipIndex += 1) {
     const subjectRowId = pickRandom(employeeRowIds);

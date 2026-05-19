@@ -44,6 +44,16 @@ pub struct RelationshipRecord {
     pub created_at_ms: u128,
 }
 
+/// Schema-level relationship between two entity types (no row ids).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityRelationshipDefinition {
+    pub id: u64,
+    pub relationship_name: String,
+    pub subject_entity_id: u64,
+    pub object_entity_id: u64,
+    pub created_at_ms: u128,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateEntityRequest {
     pub name: String,
@@ -76,6 +86,20 @@ pub struct UpdateEntityRowRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct CreateEntityRelationshipRequest {
+    pub relationship_name: String,
+    pub subject_entity_id: u64,
+    pub object_entity_id: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateEntityRelationshipRequest {
+    pub relationship_name: Option<String>,
+    pub subject_entity_id: Option<u64>,
+    pub object_entity_id: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateRelationshipRequest {
     pub relationship_name: String,
     pub subject_entity_id: u64,
@@ -91,4 +115,23 @@ pub struct UpdateRelationshipRequest {
     pub object_entity_id: Option<u64>,
     pub subject_row_id: Option<u64>,
     pub object_row_id: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum TurtleEntityIdsPayload {
+    /// JSON string `"*"`: export all entities and relationships from LMDB.
+    Wildcard(String),
+    /// Entity ids to export; scope expands to related entities via stored relationships.
+    Ids(Vec<u64>),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TurtleExportRequest {
+    /// Numeric ids, or the string `"*"` for the full graph.
+    #[serde(default)]
+    pub entity_ids: Option<TurtleEntityIdsPayload>,
+    /// Entity names (e.g. `"corporation"`, `"employee"`) — resolved to ids before relationship expansion.
+    #[serde(default)]
+    pub entity_names: Option<Vec<String>>,
 }
