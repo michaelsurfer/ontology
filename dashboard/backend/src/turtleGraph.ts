@@ -69,10 +69,8 @@ export function buildGraphFromTurtle(turtleText: string): GraphViewModel {
 
     if (predicate === RDF_TYPE && objectValue !== OWL_CLASS && objectValue !== OWL_OBJECT_PROPERTY) {
       instanceNodes.add(subject);
-      ensureNode(subject, shortLabel(subject), 'instance');
       if (classNodes.has(objectValue) || objectValue.includes('#') || objectValue.includes('/')) {
         ensureNode(objectValue, shortLabel(objectValue), 'class');
-        addEdge(subject, objectValue, 'rdf:type');
       }
       continue;
     }
@@ -108,15 +106,25 @@ export function buildGraphFromTurtle(turtleText: string): GraphViewModel {
           ? 'property'
           : 'instance';
 
+      if (subjectKind === 'instance' || objectKind === 'instance') {
+        continue;
+      }
+
       ensureNode(subject, shortLabel(subject), subjectKind);
       ensureNode(objectValue, shortLabel(objectValue), objectKind);
       addEdge(subject, objectValue, shortLabel(predicate));
     }
   }
 
+  const schemaNodes = Array.from(nodeMap.values()).filter((node) => node.kind !== 'instance');
+  const schemaNodeIds = new Set(schemaNodes.map((node) => node.id));
+  const schemaEdges = edgeList.filter(
+    (edge) => schemaNodeIds.has(edge.source) && schemaNodeIds.has(edge.target),
+  );
+
   return {
-    nodes: Array.from(nodeMap.values()),
-    edges: edgeList,
+    nodes: schemaNodes,
+    edges: schemaEdges,
     turtlePreview: turtleText,
   };
 }

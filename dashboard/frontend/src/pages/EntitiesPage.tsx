@@ -2,38 +2,32 @@ import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  CircularProgress,
   IconButton,
-  MenuItem,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import { EntityStructureDialog } from '../components/EntityStructureDialog';
 import { ontologyApi } from '../api/client';
-import type { EntitySummary, FieldType } from '../types';
-
-const emptyField = { field_name: '', field_type: 'TEXT' as FieldType, is_required: false };
+import type { EntityDefinition, EntitySummary } from '../types';
 
 export function EntitiesPage() {
   const [entities, setEntities] = useState<EntitySummary[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [entityName, setEntityName] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [fields, setFields] = useState([{ ...emptyField }]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [entityBeingEdited, setEntityBeingEdited] = useState<EntityDefinition | null>(null);
+  const [loadingEditEntityId, setLoadingEditEntityId] = useState<number | null>(null);
 
   useEffect(() => {
     void reloadEntities();
@@ -49,20 +43,17 @@ export function EntitiesPage() {
     }
   }
 
-  async function handleCreateEntity() {
+  async function openEditEntityDialog(entityId: number) {
+    setLoadingEditEntityId(entityId);
     try {
-      await ontologyApi.createEntity({
-        name: entityName.trim(),
-        display_name: displayName.trim() || entityName.trim(),
-        fields,
-      });
-      setDialogOpen(false);
-      setEntityName('');
-      setDisplayName('');
-      setFields([{ ...emptyField }]);
-      await reloadEntities();
+      const response = await ontologyApi.getEntity(entityId);
+      setEntityBeingEdited(response.data);
+      setEditDialogOpen(true);
+      setErrorMessage('');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to create entity');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to load entity for edit');
+    } finally {
+      setLoadingEditEntityId(null);
     }
   }
 
@@ -84,7 +75,7 @@ export function EntitiesPage() {
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
           Entities
         </Typography>
-        <Button variant="contained" onClick={() => setDialogOpen(true)}>
+        <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
           New entity
         </Button>
       </Stack>
@@ -111,6 +102,17 @@ export function EntitiesPage() {
                     </Button>
                   </TableCell>
                   <TableCell align="right">
+                    <IconButton
+                      aria-label="Edit entity structure"
+                      onClick={() => void openEditEntityDialog(entity.id)}
+                      disabled={loadingEditEntityId === entity.id}
+                    >
+                      {loadingEditEntityId === entity.id ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <EditIcon />
+                      )}
+                    </IconButton>
                     <IconButton color="error" onClick={() => void handleDeleteEntity(entity.id)}>
                       <DeleteIcon />
                     </IconButton>
@@ -122,69 +124,24 @@ export function EntitiesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Create entity</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Name (snake_case)"
-              value={entityName}
-              onChange={(event) => setEntityName(event.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Display name"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              fullWidth
-            />
-            {fields.map((field, index) => (
-              <Box key={index} sx={{ display: 'flex', gap: 1 }}>
-                <TextField
-                  label="Field name"
-                  value={field.field_name}
-                  onChange={(event) => {
-                    const next = [...fields];
-                    next[index] = { ...next[index], field_name: event.target.value };
-                    setFields(next);
-                  }}
-                  fullWidth
-                />
-                <TextField
-                  select
-                  label="Type"
-                  value={field.field_type}
-                  onChange={(event) => {
-                    const next = [...fields];
-                    next[index] = {
-                      ...next[index],
-                      field_type: event.target.value as FieldType,
-                    };
-                    setFields(next);
-                  }}
-                  sx={{ minWidth: 120 }}
-                >
-                  <MenuItem value="TEXT">TEXT</MenuItem>
-                  <MenuItem value="INTEGER">INTEGER</MenuItem>
-                  <MenuItem value="REAL">REAL</MenuItem>
-                </TextField>
-              </Box>
-            ))}
-            <Button
-              variant="outlined"
-              onClick={() => setFields([...fields, { ...emptyField }])}
-            >
-              Add field
-            </Button>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={() => void handleCreateEntity()}>
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <EntityStructureDialog
+        open={createDialogOpen}
+        mode="create"
+        onClose={() => setCreateDialogOpen(false)}
+        onSaved={() => void reloadEntities()}
+      />
+
+      <EntityStructureDialog
+        open={editDialogOpen}
+        mode="edit"
+        entityId={entityBeingEdited?.id}
+        initialEntity={entityBeingEdited}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setEntityBeingEdited(null);
+        }}
+        onSaved={() => void reloadEntities()}
+      />
     </Stack>
   );
 }

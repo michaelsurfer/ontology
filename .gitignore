@@ -35,6 +35,7 @@ venv/
 *.sqlite3
 *.db
 backend/data/
+dashboard/backend/data/
 
 # OS / editor files
 .DS_Store

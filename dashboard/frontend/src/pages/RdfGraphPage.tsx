@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardContent,
@@ -11,6 +10,7 @@ import {
 } from '@mui/material';
 import { ontologyApi } from '../api/client';
 import { RdfGraphView } from '../components/RdfGraphView';
+import { TurtlePreviewPanel } from '../components/TurtlePreviewPanel';
 import type { GraphViewModel } from '../types';
 
 export function RdfGraphPage() {
@@ -74,7 +74,7 @@ export function RdfGraphPage() {
         RDF graph
       </Typography>
       <Typography color="text.secondary">
-        Exports Turtle from data-layer-service and renders classes, properties, and instance links.
+        Exports Turtle from data-layer-service and renders classes and properties (schema graph).
       </Typography>
 
       <Card variant="outlined">
@@ -103,29 +103,7 @@ export function RdfGraphPage() {
 
       {graph ? <RdfGraphView graph={graph} /> : null}
 
-      {graph ? (
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Turtle preview
-            </Typography>
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                p: 2,
-                bgcolor: 'grey.100',
-                borderRadius: 1,
-                overflow: 'auto',
-                maxHeight: 360,
-                fontSize: 12,
-              }}
-            >
-              {graph.turtlePreview}
-            </Box>
-          </CardContent>
-        </Card>
-      ) : null}
+      {graph ? <TurtlePreviewPanel turtleText={graph.turtlePreview} /> : null}
     </Stack>
   );
 }

@@ -34,6 +34,16 @@ npm --prefix frontend install
 
 ## Run
 
+**All platform services** (data-layer, rdf-cache, dashboard, mcp):
+
+```bash
+# From repository root
+./scripts/start-all.sh
+# or: npm run start:all
+```
+
+**Dashboard only** (requires data-layer and rdf-cache already running):
+
 ```bash
 cd dashboard
 npm run dev
@@ -49,6 +59,7 @@ npm run dev
 | `DATA_LAYER_URL` | `http://127.0.0.1:8182` | data-layer-service base URL (backend) |
 | `RDF_CACHE_URL` | `http://127.0.0.1:8181` | rdf-cache-service for **Sync cache** |
 | `DASHBOARD_API_PORT` | `5180` | Dashboard API port |
+| `DASHBOARD_WORKFLOW_DB_PATH` | `dashboard/backend/data/dashboard-workflows.sqlite` | Workflow definitions & run history |
 
 ## Features
 
@@ -56,6 +67,8 @@ npm run dev
 - **Entity relationships** — schema-level links between entity types (`/entity-relationships`)
 - **Row links** — instance links between rows (`/relationships`)
 - **RDF graph** — export Turtle via data-layer and visualize as an interactive graph
+- **Workflows** — node canvas (Trigger → Entities → Relationships → Fallback) with SQLite-stored definitions and ingest runs
+- **Landing zone** — review records sent from workflow fallback nodes
 
 ## API routes (dashboard backend)
 
@@ -68,3 +81,7 @@ All under `/api/*`, proxied to data-layer-service:
 - `POST /api/rdf/turtle` — raw Turtle text
 - `POST /api/rdf/graph` — `{ nodes, edges, turtlePreview }` for the graph view
 - `POST /api/rdf/sync-cache` — export Turtle from data-layer, then `POST /cache/load` on rdf-cache-service
+- `GET/POST/PUT/DELETE /api/workflows` — workflow CRUD (graph stored in SQLite)
+- `POST /api/workflows/:id/run` — execute canvas pipeline (`dry_run` supported)
+- `POST /api/workflows/:id/webhook` — trigger workflow via HTTP (JSON body = ingest payload)
+- `GET/DELETE /api/landing-zone` — list or remove landing zone records

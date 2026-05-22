@@ -7,6 +7,13 @@ import type {
   GraphViewModel,
   RelationshipRecord,
 } from '../types';
+import type {
+  WorkflowDetail,
+  WorkflowExecutionResult,
+  WorkflowGraph,
+  WorkflowRunSummary,
+  WorkflowSummary,
+} from '../types/workflow';
 
 export const apiClient = axios.create({
   baseURL: '/api',
@@ -97,6 +104,15 @@ export const ontologyApi = {
   fetchTurtle: (body: { entity_ids?: '*' | number[]; entity_names?: string[] }) =>
     apiClient.post<string>('/rdf/turtle', body, { responseType: 'text' }),
 
+  fetchRdfCacheMeta: () =>
+    apiClient.get<{
+      ok: boolean;
+      rdfCacheUrl: string;
+      version: number;
+      turtle_bytes: number;
+      updated_at_ms: number;
+    }>('/rdf/cache-meta'),
+
   syncRdfCache: (body: { entity_ids?: '*' | number[]; entity_names?: string[] } = { entity_ids: '*' }) =>
     apiClient.post<{
       ok: boolean;
@@ -106,4 +122,46 @@ export const ontologyApi = {
       turtle_bytes: number;
       updated_at_ms: number;
     }>('/rdf/sync-cache', body),
+
+  listWorkflows: () => apiClient.get<WorkflowSummary[]>('/workflows'),
+
+  getWorkflow: (workflowId: number) => apiClient.get<WorkflowDetail>(`/workflows/${workflowId}`),
+
+  createWorkflow: (body: { name: string; graph: WorkflowGraph }) =>
+    apiClient.post<WorkflowDetail>('/workflows', body),
+
+  updateWorkflow: (
+    workflowId: number,
+    body: { name: string; graph: WorkflowGraph },
+  ) => apiClient.put<WorkflowDetail>(`/workflows/${workflowId}`, body),
+
+  deleteWorkflow: (workflowId: number) => apiClient.delete(`/workflows/${workflowId}`),
+
+  runWorkflow: (workflowId: number, body: { input: unknown; dry_run?: boolean }) =>
+    apiClient.post<{
+      run_id: number;
+      workflow_id: number;
+      status: string;
+      dry_run: boolean;
+      result: WorkflowExecutionResult;
+    }>(`/workflows/${workflowId}/run`, body),
+
+  listWorkflowRuns: (workflowId: number) =>
+    apiClient.get<WorkflowRunSummary[]>(`/workflows/${workflowId}/runs`),
+
+  listLandingZoneRecords: () =>
+    apiClient.get<
+      Array<{
+        id: number;
+        workflow_id: number | null;
+        workflow_name: string;
+        run_id: number | null;
+        record_index: number;
+        reason: string;
+        payload: Record<string, unknown>;
+        created_at_ms: number;
+      }>
+    >('/landing-zone'),
+
+  deleteLandingZoneRecord: (recordId: number) => apiClient.delete(`/landing-zone/${recordId}`),
 };

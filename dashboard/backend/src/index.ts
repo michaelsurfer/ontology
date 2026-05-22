@@ -1,9 +1,16 @@
 import cors from 'cors';
 import express from 'express';
 import { dataLayerClient, getDataLayerBaseUrl } from './dataLayerClient.js';
-import { getRdfCacheBaseUrl, syncRdfCacheFromDataLayer } from './rdfCacheClient.js';
+import {
+  fetchRdfCacheMeta,
+  getRdfCacheBaseUrl,
+  syncRdfCacheFromDataLayer,
+} from './rdfCacheClient.js';
 import { buildGraphFromTurtle } from './turtleGraph.js';
 import type { TurtleExportRequest } from './types.js';
+import { getWorkflowDatabase } from './workflow/database.js';
+import { registerLandingZoneRoutes } from './landingZoneRoutes.js';
+import { registerWorkflowRoutes } from './workflowRoutes.js';
 
 const defaultPort = 5180;
 
@@ -12,6 +19,10 @@ function startDashboardServer() {
   const application = express();
   application.use(cors());
   application.use(express.json({ limit: '4mb' }));
+
+  getWorkflowDatabase();
+  registerWorkflowRoutes(application);
+  registerLandingZoneRoutes(application);
 
   application.get('/api/health', async (_request, response) => {
     try {
@@ -216,6 +227,18 @@ function startDashboardServer() {
         request.body && typeof request.body === 'object' ? request.body : { entity_ids: '*' };
       const turtleText = await dataLayerClient.exportTurtle(exportBody);
       response.json(buildGraphFromTurtle(turtleText));
+    } catch (error) {
+      response.status(400).json({ error: formatError(error) });
+    }
+  });
+
+  application.get('/api/rdf/cache-meta', async (_request, response) => {
+    try {
+      const meta = await fetchRdfCacheMeta();
+      response.json({
+        ...meta,
+        rdfCacheUrl: getRdfCacheBaseUrl(),
+      });
     } catch (error) {
       response.status(400).json({ error: formatError(error) });
     }

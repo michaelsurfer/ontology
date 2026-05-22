@@ -19,6 +19,13 @@ export interface SyncRdfCacheResult {
   updated_at_ms: number;
 }
 
+export interface RdfCacheMeta {
+  ok: boolean;
+  version: number;
+  turtle_bytes: number;
+  updated_at_ms: number;
+}
+
 // Resolve rdf-cache-service base URL from environment.
 export function getRdfCacheBaseUrl(): string {
   return String(process.env.RDF_CACHE_URL || defaultRdfCacheUrl).replace(/\/+$/, '');
@@ -61,6 +68,38 @@ export async function loadRdfCache(turtleText: string): Promise<RdfCacheLoadResp
   }
 
   return parsed as RdfCacheLoadResponse;
+}
+
+// Read RDF cache metadata from rdf-cache-service (version, size, last update time).
+export async function fetchRdfCacheMeta(): Promise<RdfCacheMeta> {
+  const response = await fetch(`${getRdfCacheBaseUrl()}/cache/meta`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+
+  const responseText = await response.text();
+  let parsed: unknown = null;
+  if (responseText) {
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      parsed = { raw: responseText };
+    }
+  }
+
+  if (!response.ok) {
+    const errorMessage =
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'error' in parsed &&
+      typeof (parsed as { error: unknown }).error === 'string'
+        ? (parsed as { error: string }).error
+        : `HTTP ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return parsed as RdfCacheMeta;
 }
 
 // Export full graph from data-layer, then load it into the Rust RDF cache.

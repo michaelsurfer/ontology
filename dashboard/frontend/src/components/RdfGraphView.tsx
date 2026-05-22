@@ -51,9 +51,10 @@ function computeNeighborNodeIds(
   return visibleNodeIds;
 }
 
-// Build React Flow nodes from the RDF graph model with an initial grid layout.
+// Build React Flow nodes from the RDF graph model with an initial grid layout (schema only).
 function buildFlowNodes(graphNodes: GraphViewModel['nodes']): Node<FlowNodeData>[] {
-  return graphNodes.map((node, index) => ({
+  const schemaNodes = graphNodes.filter((node) => node.kind !== 'instance');
+  return schemaNodes.map((node, index) => ({
     id: node.id,
     data: {
       label: `${node.label} (${node.kind})`,
@@ -76,15 +77,33 @@ function buildFlowNodes(graphNodes: GraphViewModel['nodes']): Node<FlowNodeData>
   }));
 }
 
-// Build React Flow edges from the RDF graph model.
-function buildFlowEdges(graphEdges: GraphViewModel['edges']): Edge[] {
-  return graphEdges.map((edge) => ({
+// Build React Flow edges from the RDF graph model (endpoints must be schema nodes).
+function buildFlowEdges(
+  graphEdges: GraphViewModel['edges'],
+  schemaNodeIds: Set<string>,
+): Edge[] {
+  return graphEdges
+    .filter((edge) => schemaNodeIds.has(edge.source) && schemaNodeIds.has(edge.target))
+    .map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
     label: edge.label,
     animated: edge.label === 'rdf:type',
   }));
+}
+
+// Nodes and edges shown in the chart (classes and properties only).
+function filterSchemaGraph(graph: GraphViewModel): {
+  nodes: GraphViewModel['nodes'];
+  edges: GraphViewModel['edges'];
+} {
+  const nodes = graph.nodes.filter((node) => node.kind !== 'instance');
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = graph.edges.filter(
+    (edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target),
+  );
+  return { nodes, edges };
 }
 
 // Zoom the viewport to fit only the nodes that are currently visible.
@@ -114,22 +133,28 @@ function FitViewToVisibleNodes({
 function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
 
-  const initialNodes = useMemo(() => buildFlowNodes(graph.nodes), [graph.nodes]);
-  const initialEdges = useMemo(() => buildFlowEdges(graph.edges), [graph.edges]);
+  const schemaGraph = useMemo(() => filterSchemaGraph(graph), [graph]);
+
+  const initialNodes = useMemo(() => buildFlowNodes(schemaGraph.nodes), [schemaGraph.nodes]);
+  const initialEdges = useMemo(() => {
+    const nodeIds = new Set(schemaGraph.nodes.map((node) => node.id));
+    return buildFlowEdges(schemaGraph.edges, nodeIds);
+  }, [schemaGraph.edges, schemaGraph.nodes]);
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const visibleNodeIds = useMemo(
-    () => computeNeighborNodeIds(focusedNodeId, graph.edges),
-    [focusedNodeId, graph.edges],
+    () => computeNeighborNodeIds(focusedNodeId, schemaGraph.edges),
+    [focusedNodeId, schemaGraph.edges],
   );
 
   useEffect(() => {
     setFocusedNodeId(null);
-    setFlowNodes(buildFlowNodes(graph.nodes));
-    setFlowEdges(buildFlowEdges(graph.edges));
-  }, [graph, setFlowNodes, setFlowEdges]);
+    setFlowNodes(buildFlowNodes(schemaGraph.nodes));
+    const nodeIds = new Set(schemaGraph.nodes.map((node) => node.id));
+    setFlowEdges(buildFlowEdges(schemaGraph.edges, nodeIds));
+  }, [schemaGraph, setFlowNodes, setFlowEdges]);
 
   const displayNodes = useMemo(() => {
     return flowNodes.map((node) => {
@@ -164,7 +189,7 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
     });
   }, [flowEdges, visibleNodeIds]);
 
-  const visibleCount = visibleNodeIds ? visibleNodeIds.size : graph.nodes.length;
+  const visibleCount = visibleNodeIds ? visibleNodeIds.size : schemaGraph.nodes.length;
 
   const handleNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setFocusedNodeId(node.id);
@@ -182,15 +207,15 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
     if (!focusedNodeId) {
       return '';
     }
-    const match = graph.nodes.find((node) => node.id === focusedNodeId);
+    const match = schemaGraph.nodes.find((node) => node.id === focusedNodeId);
     return match ? match.label : focusedNodeId;
-  }, [focusedNodeId, graph.nodes]);
+  }, [focusedNodeId, schemaGraph.nodes]);
 
   return (
     <Box>
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} useFlexGap flexWrap="wrap" alignItems="center">
-        <Chip label={`${graph.nodes.length} nodes`} size="small" />
-        <Chip label={`${graph.edges.length} edges`} size="small" />
+        <Chip label={`${schemaGraph.nodes.length} nodes`} size="small" />
+        <Chip label={`${schemaGraph.edges.length} edges`} size="small" />
         {focusedNodeId ? (
           <Chip
             label={`Showing ${visibleCount} connected`}
@@ -200,7 +225,6 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
           />
         ) : null}
         <Chip label="class" size="small" sx={{ bgcolor: nodeColors.class }} />
-        <Chip label="instance" size="small" sx={{ bgcolor: nodeColors.instance }} />
         <Chip label="property" size="small" sx={{ bgcolor: nodeColors.property }} />
         {focusedNodeId ? (
           <Button size="small" variant="outlined" onClick={handleShowAllClick}>

@@ -21,6 +21,8 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LinkIcon from '@mui/icons-material/Link';
+import { EntityRelationshipLinksDialog } from '../components/EntityRelationshipLinksDialog';
 import { ontologyApi } from '../api/client';
 import type { EntityRelationshipDefinition, EntitySummary } from '../types';
 
@@ -32,6 +34,9 @@ export function EntityRelationshipsPage() {
   const [relationshipName, setRelationshipName] = useState('works_at');
   const [subjectEntityId, setSubjectEntityId] = useState<number>(0);
   const [objectEntityId, setObjectEntityId] = useState<number>(0);
+  const [linksDialogOpen, setLinksDialogOpen] = useState(false);
+  const [viewLinksDefinition, setViewLinksDefinition] =
+    useState<EntityRelationshipDefinition | null>(null);
 
   useEffect(() => {
     void reload();
@@ -58,6 +63,17 @@ export function EntityRelationshipsPage() {
   function entityLabel(entityId: number): string {
     const match = entities.find((entity) => entity.id === entityId);
     return match ? `${match.name} (${match.id})` : String(entityId);
+  }
+
+  // Open dialog showing table, sentences, and graph for row-level links.
+  function openViewLinks(definition: EntityRelationshipDefinition) {
+    setViewLinksDefinition(definition);
+    setLinksDialogOpen(true);
+  }
+
+  function closeViewLinks() {
+    setLinksDialogOpen(false);
+    setViewLinksDefinition(null);
   }
 
   async function handleCreate() {
@@ -93,7 +109,10 @@ export function EntityRelationshipsPage() {
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
             Entity relationships
           </Typography>
-          <Typography color="text.secondary">Schema-level links between entity types</Typography>
+          <Typography color="text.secondary">
+            Schema-level links between entity types. Use View links to see how rows connect (e.g.
+            Employee A works at Company B).
+          </Typography>
         </Box>
         <Button variant="contained" onClick={() => setDialogOpen(true)}>
           New relationship
@@ -116,18 +135,28 @@ export function EntityRelationshipsPage() {
             </TableHead>
             <TableBody>
               {relationships.map((relationship) => (
-                <TableRow key={relationship.id}>
+                <TableRow key={relationship.id} hover>
                   <TableCell>{relationship.id}</TableCell>
                   <TableCell>{relationship.relationship_name}</TableCell>
                   <TableCell>{entityLabel(relationship.subject_entity_id)}</TableCell>
                   <TableCell>{entityLabel(relationship.object_entity_id)}</TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      color="error"
-                      onClick={() => void handleDelete(relationship.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<LinkIcon />}
+                        onClick={() => openViewLinks(relationship)}
+                      >
+                        View links
+                      </Button>
+                      <IconButton
+                        color="error"
+                        onClick={() => void handleDelete(relationship.id)}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))}
@@ -135,6 +164,13 @@ export function EntityRelationshipsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <EntityRelationshipLinksDialog
+        open={linksDialogOpen}
+        onClose={closeViewLinks}
+        definition={viewLinksDefinition}
+        entities={entities}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Create entity relationship</DialogTitle>

@@ -5,21 +5,12 @@ import {
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import { EntityRowDataTable } from '../components/EntityRowDataTable';
+import { EntityStructureDialog } from '../components/EntityStructureDialog';
 import { ontologyApi } from '../api/client';
 import type { EntityDefinition, EntityRowRecord } from '../types';
 
@@ -30,8 +21,7 @@ export function EntityDetailPage() {
   const [entity, setEntity] = useState<EntityDefinition | null>(null);
   const [rows, setRows] = useState<EntityRowRecord[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [rowValuesText, setRowValuesText] = useState('{\n  \n}');
+  const [structureDialogOpen, setStructureDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!Number.isFinite(entityId)) {
@@ -54,15 +44,16 @@ export function EntityDetailPage() {
     }
   }
 
-  async function handleCreateRow() {
-    try {
-      const parsedValues = JSON.parse(rowValuesText) as Record<string, unknown>;
-      await ontologyApi.createEntityRow(entityId, parsedValues);
-      setDialogOpen(false);
-      await reload();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to create row');
-    }
+  async function handleCreateRow(values: Record<string, unknown>) {
+    await ontologyApi.createEntityRow(entityId, values);
+    setErrorMessage('');
+    await reload();
+  }
+
+  async function handleUpdateRow(rowId: number, values: Record<string, unknown>) {
+    await ontologyApi.updateEntityRow(entityId, rowId, values);
+    setErrorMessage('');
+    await reload();
   }
 
   async function handleDeleteRow(rowId: number) {
@@ -81,8 +72,6 @@ export function EntityDetailPage() {
     return <Typography>Loading entity…</Typography>;
   }
 
-  const fieldNames = entity.fields.map((field) => field.field_name);
-
   return (
     <Stack spacing={2}>
       <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -96,84 +85,55 @@ export function EntityDetailPage() {
 
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Fields
-          </Typography>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 1 }}
+          >
+            <Typography variant="h6">Fields</Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<EditIcon />}
+              onClick={() => setStructureDialogOpen(true)}
+            >
+              Edit structure
+            </Button>
+          </Stack>
           <Typography variant="body2" color="text.secondary">
-            {entity.fields.map((field) => `${field.field_name} (${field.field_type})`).join(', ')}
+            {entity.fields
+              .map((field) => {
+                const requiredLabel = field.is_required ? ', required' : '';
+                return `${field.field_name} (${field.field_type}${requiredLabel})`;
+              })
+              .join(', ')}
           </Typography>
         </CardContent>
       </Card>
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h6">Row data</Typography>
-        <Button variant="contained" onClick={() => setDialogOpen(true)}>
-          Add row
-        </Button>
-      </Stack>
+      <Typography variant="h6">Row data</Typography>
 
       <Card variant="outlined">
         <CardContent sx={{ overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                {fieldNames.map((fieldName) => (
-                  <TableCell key={fieldName}>{fieldName}</TableCell>
-                ))}
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.id}</TableCell>
-                  {fieldNames.map((fieldName) => (
-                    <TableCell key={`${row.id}-${fieldName}`}>
-                      {formatCell(row.values[fieldName])}
-                    </TableCell>
-                  ))}
-                  <TableCell align="right">
-                    <IconButton color="error" onClick={() => void handleDeleteRow(row.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <EntityRowDataTable
+            entity={entity}
+            rows={rows}
+            onCreateRow={handleCreateRow}
+            onUpdateRow={handleUpdateRow}
+            onDeleteRow={handleDeleteRow}
+          />
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Add row (JSON values)</DialogTitle>
-        <DialogContent>
-          <TextField
-            multiline
-            minRows={8}
-            fullWidth
-            value={rowValuesText}
-            onChange={(event) => setRowValuesText(event.target.value)}
-            sx={{ mt: 1, fontFamily: 'monospace' }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={() => void handleCreateRow()}>
-            Save row
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <EntityStructureDialog
+        open={structureDialogOpen}
+        mode="edit"
+        entityId={entity.id}
+        initialEntity={entity}
+        onClose={() => setStructureDialogOpen(false)}
+        onSaved={() => void reload()}
+      />
     </Stack>
   );
-}
-
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-  return String(value);
 }
