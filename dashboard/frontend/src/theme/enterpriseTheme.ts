@@ -5,7 +5,7 @@ const sidebarText = '#e2e8f0';
 const sidebarTextMuted = '#94a3b8';
 const brandAccent = '#3b82f6';
 
-// Enterprise MUI theme for the ontology dashboard.
+// Enterprise MUI theme for the AnythingGraph dashboard.
 export const enterpriseTheme = createTheme({
   palette: {
     mode: 'light',

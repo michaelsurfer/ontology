@@ -22,7 +22,7 @@ Default database directory: `./data/data-layer-lmdb` (LMDB environment folder)
 | `DATA_LAYER_HOST` | `127.0.0.1` | Bind host |
 | `DATA_LAYER_PORT` | `8182` | Bind port |
 | `DATA_LAYER_DB_PATH` | `./data/data-layer-lmdb` | LMDB environment directory |
-| `DATA_LAYER_BASE_IRI` | `http://example.com/context#` | Ontology + property IRI prefix |
+| `DATA_LAYER_BASE_IRI` | `http://example.com/context#` | Schema + property IRI prefix |
 | `DATA_LAYER_RESOURCE_IRI_PREFIX` | `http://example.com/resource/` | Instance resource URIs |
 | `RUST_LOG` | — | Log filter (e.g. `info`) |
 
@@ -65,7 +65,7 @@ Use the URL **without** a trailing slash (`/rdf/turtle`, not `/rdf/turtle/`).
 Each entity has an auto-increment `id` and a unique `name` (`^[a-z][a-z0-9_]*$`).
 
 - `POST /entities` — create entity + fields  
-  Body: `{ "name": "person", "display_name": "Person", "fields": [{ "field_name": "email", "field_type": "TEXT", "is_required": true }] }`
+  Body: `{ "name": "person", "display_name": "Person", "fields": [{ "field_name": "email", "field_type": "TEXT", "is_required": true, "description": "Work email", "example": "alice@example.com", "extraction_hint": "From HR CSV column work_email", "is_identifier": false }] }`
 - `PUT /entities/:entity_id` — update name, display name, and/or fields  
   Body: partial `{ "name", "display_name", "fields" }`
 - `GET /entities` — list `{ id, name }[]`
@@ -100,7 +100,7 @@ RDF Turtle export emits `owl:ObjectProperty` with `rdfs:domain` / `rdfs:range` f
 
 ### Relationship links (instance data)
 
-Links **specific rows** between two entities:
+Links **specific rows** between two entities. A matching **entity relationship** (schema) must exist first — same `relationship_name`, `subject_entity_id`, and `object_entity_id`.
 
 - `POST /relationships`  
   Body: `{ "relationship_name", "subject_entity_id", "object_entity_id", "subject_row_id", "object_row_id" }`

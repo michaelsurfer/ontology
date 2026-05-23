@@ -1,7 +1,9 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import ReactFlow, {
   Background,
   Controls,
+  useEdges,
+  useNodes,
   useReactFlow,
   type Connection,
   type Edge,
@@ -34,6 +36,41 @@ type WorkflowEditorCanvasProps = {
   onEdgesDelete: (edges: Edge[]) => void;
   onAddNodeAtPosition: (nodeType: WorkflowNodeType, position: { x: number; y: number }) => void;
 };
+
+const workflowFitViewZoom = 0.7;
+
+// Fit the workflow graph at 70% zoom when nodes change (initial load or workflow open).
+function FitWorkflowViewAtHalfZoom() {
+  const nodes = useNodes();
+  const edges = useEdges();
+  const { fitView } = useReactFlow();
+  const graphSignature = [
+    nodes
+      .map((node) => node.id)
+      .sort()
+      .join(','),
+    edges
+      .map((edge) => edge.id)
+      .sort()
+      .join(','),
+  ].join('|');
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      void fitView({
+        padding: 0.25,
+        minZoom: workflowFitViewZoom,
+        maxZoom: workflowFitViewZoom,
+        duration: 0,
+      });
+    });
+  }, [graphSignature, edges.length, fitView, nodes.length]);
+
+  return null;
+}
 
 // React Flow canvas with drop-to-add support (must be used inside ReactFlowProvider).
 export function WorkflowEditorCanvas({
@@ -94,8 +131,11 @@ export function WorkflowEditorCanvas({
         deleteKeyCode={['Backspace', 'Delete']}
         nodeTypes={workflowNodeTypes}
         edgeTypes={workflowEdgeTypes}
-        fitView
+        minZoom={0.1}
+        maxZoom={2}
+        defaultViewport={{ x: 0, y: 0, zoom: workflowFitViewZoom }}
       >
+        <FitWorkflowViewAtHalfZoom />
         <Background />
         <Controls />
       </ReactFlow>

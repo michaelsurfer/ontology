@@ -1,7 +1,7 @@
 {
   "name": "ontox-cli",
   "version": "0.1.0",
-  "description": "OntoX CLI for the ontology platform",
+  "description": "OntoX CLI for the AnythingGraph platform",
   "type": "module",
   "bin": {
     "ontox": "src/main.js"

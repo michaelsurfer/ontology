@@ -1,5 +1,5 @@
 import { Parser } from 'n3';
-import type { GraphEdge, GraphNode, GraphViewModel } from './types.js';
+import type { EntitySummary, GraphEdge, GraphNode, GraphViewModel } from './types.js';
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class';
@@ -125,6 +125,41 @@ export function buildGraphFromTurtle(turtleText: string): GraphViewModel {
   return {
     nodes: schemaNodes,
     edges: schemaEdges,
-    turtlePreview: turtleText,
+  };
+}
+
+// Convert snake_case entity names to PascalCase (matches data-layer Turtle export).
+function toPascalCase(snakeCaseName: string): string {
+  const parts = snakeCaseName.split('_').filter((segment) => segment.length > 0);
+  if (parts.length === 0) {
+    return 'Entity';
+  }
+  return parts
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('');
+}
+
+// Attach entity ids to class nodes using PascalCase labels from Turtle class IRIs.
+export function attachEntityIdsToClassNodes(
+  graph: GraphViewModel,
+  entities: EntitySummary[],
+): GraphViewModel {
+  const entityIdByClassLabel = new Map<string, number>();
+  for (const entity of entities) {
+    entityIdByClassLabel.set(toPascalCase(entity.name), entity.id);
+  }
+
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => {
+      if (node.kind !== 'class') {
+        return node;
+      }
+      const entityId = entityIdByClassLabel.get(node.label);
+      if (!entityId) {
+        return node;
+      }
+      return { ...node, entityId };
+    }),
   };
 }

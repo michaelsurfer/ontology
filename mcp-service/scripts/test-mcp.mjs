@@ -1,5 +1,5 @@
 /**
- * Smoke-test the ontology MCP server over stdio (same transport Cursor uses).
+ * Smoke-test the AnythingGraph MCP server over stdio (same transport Cursor uses).
  */
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -27,7 +27,7 @@ async function runMcpSmokeTest() {
     stderr: 'pipe',
   });
 
-  const client = new Client({ name: 'ontology-mcp-test', version: '1.0.0' });
+  const client = new Client({ name: 'anythinggraph-mcp-test', version: '1.0.0' });
 
   console.log('Connecting to MCP server:', serverEntryPath);
   await client.connect(transport);
@@ -56,8 +56,8 @@ async function runMcpSmokeTest() {
     console.log('Sample:', JSON.stringify(entities.slice(0, 3)));
   }
 
-  console.log('\n--- resource ontology://schema-summary ---');
-  const resourceResult = await client.readResource({ uri: 'ontology://schema-summary' });
+  console.log('\n--- resource anythinggraph://schema-summary ---');
+  const resourceResult = await client.readResource({ uri: 'anythinggraph://schema-summary' });
   const resourceText = resourceResult.contents?.[0]?.text || '';
   const summary = JSON.parse(resourceText);
   console.log('Entities in summary:', summary.entities?.length ?? 0);

@@ -1,7 +1,7 @@
 {
   "name": "ontox",
   "version": "0.1.0",
-  "description": "OntoX JavaScript SDK for the ontology platform",
+  "description": "OntoX JavaScript SDK for the AnythingGraph platform",
   "type": "module",
   "main": "src/index.js",
   "exports": {

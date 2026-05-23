@@ -21,14 +21,16 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import { PageHeader } from '../components/PageHeader';
 import { ontologyApi } from '../api/client';
-import type { EntitySummary, RelationshipRecord } from '../types';
+import type { EntityRelationshipDefinition, EntitySummary, RelationshipRecord } from '../types';
 
 export function RowRelationshipsPage() {
   const [entities, setEntities] = useState<EntitySummary[]>([]);
+  const [entityRelationships, setEntityRelationships] = useState<EntityRelationshipDefinition[]>([]);
   const [relationships, setRelationships] = useState<RelationshipRecord[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [relationshipName, setRelationshipName] = useState('works_at');
+  const [selectedEntityRelationshipId, setSelectedEntityRelationshipId] = useState(0);
+  const [relationshipName, setRelationshipName] = useState('');
   const [subjectEntityId, setSubjectEntityId] = useState(0);
   const [objectEntityId, setObjectEntityId] = useState(0);
   const [subjectRowId, setSubjectRowId] = useState(1);
@@ -40,13 +42,17 @@ export function RowRelationshipsPage() {
 
   async function reload() {
     try {
-      const [entitiesResponse, relationshipsResponse] = await Promise.all([
+      const [entitiesResponse, entityRelationshipsResponse, relationshipsResponse] = await Promise.all([
         ontologyApi.listEntities(),
+        ontologyApi.listEntityRelationships(),
         ontologyApi.listRelationships(),
       ]);
       setEntities(entitiesResponse.data);
+      setEntityRelationships(entityRelationshipsResponse.data);
       setRelationships(relationshipsResponse.data);
-      if (entitiesResponse.data.length > 0) {
+      if (entityRelationshipsResponse.data.length > 0) {
+        applyEntityRelationshipSelection(entityRelationshipsResponse.data[0]);
+      } else if (entitiesResponse.data.length > 0) {
         setSubjectEntityId(entitiesResponse.data[0].id);
         setObjectEntityId(entitiesResponse.data[0].id);
       }
@@ -56,12 +62,27 @@ export function RowRelationshipsPage() {
     }
   }
 
+  function applyEntityRelationshipSelection(definition: EntityRelationshipDefinition) {
+    setSelectedEntityRelationshipId(definition.id);
+    setRelationshipName(definition.relationship_name);
+    setSubjectEntityId(definition.subject_entity_id);
+    setObjectEntityId(definition.object_entity_id);
+  }
+
+  function entityRelationshipLabel(definition: EntityRelationshipDefinition): string {
+    return `${definition.relationship_name}: ${entityLabel(definition.subject_entity_id)} → ${entityLabel(definition.object_entity_id)}`;
+  }
+
   function entityLabel(entityId: number): string {
     const match = entities.find((entity) => entity.id === entityId);
     return match ? match.name : String(entityId);
   }
 
   async function handleCreate() {
+    if (!selectedEntityRelationshipId) {
+      setErrorMessage('Select an entity relationship first (create one under Entity relationships if needed).');
+      return;
+    }
     try {
       await ontologyApi.createRelationship({
         relationship_name: relationshipName.trim(),
@@ -142,25 +163,38 @@ export function RowRelationshipsPage() {
         <DialogTitle>Create row link</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Relationship name"
-              value={relationshipName}
-              onChange={(event) => setRelationshipName(event.target.value)}
-              fullWidth
-            />
+            {entityRelationships.length === 0 ? (
+              <Alert severity="warning">
+                No entity relationships defined yet. Create a schema relationship first under Entity
+                relationships, then return here to link specific rows.
+              </Alert>
+            ) : null}
             <TextField
               select
-              label="Subject entity"
-              value={subjectEntityId}
-              onChange={(event) => setSubjectEntityId(Number(event.target.value))}
+              label="Entity relationship (required)"
+              value={selectedEntityRelationshipId}
+              onChange={(event) => {
+                const nextId = Number(event.target.value);
+                const definition = entityRelationships.find((item) => item.id === nextId);
+                if (definition) {
+                  applyEntityRelationshipSelection(definition);
+                }
+              }}
               fullWidth
+              disabled={entityRelationships.length === 0}
             >
-              {entities.map((entity) => (
-                <MenuItem key={entity.id} value={entity.id}>
-                  {entity.name}
+              {entityRelationships.map((definition) => (
+                <MenuItem key={definition.id} value={definition.id}>
+                  {entityRelationshipLabel(definition)}
                 </MenuItem>
               ))}
             </TextField>
+            <TextField
+              label="Subject entity"
+              value={entityLabel(subjectEntityId)}
+              fullWidth
+              disabled
+            />
             <TextField
               label="Subject row id"
               type="number"
@@ -169,18 +203,11 @@ export function RowRelationshipsPage() {
               fullWidth
             />
             <TextField
-              select
               label="Object entity"
-              value={objectEntityId}
-              onChange={(event) => setObjectEntityId(Number(event.target.value))}
+              value={entityLabel(objectEntityId)}
               fullWidth
-            >
-              {entities.map((entity) => (
-                <MenuItem key={entity.id} value={entity.id}>
-                  {entity.name}
-                </MenuItem>
-              ))}
-            </TextField>
+              disabled
+            />
             <TextField
               label="Object row id"
               type="number"
@@ -192,7 +219,7 @@ export function RowRelationshipsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={() => void handleCreate()}>
+          <Button variant="contained" onClick={() => void handleCreate()} disabled={entityRelationships.length === 0}>
             Create
           </Button>
         </DialogActions>

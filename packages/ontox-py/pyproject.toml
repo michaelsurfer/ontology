@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ontox"
 version = "0.1.0"
-description = "OntoX Python SDK for the ontology platform"
+description = "OntoX Python SDK for the AnythingGraph platform"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = ["requests>=2.31.0"]

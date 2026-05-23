@@ -7,6 +7,10 @@ export type EntityField = {
   field_name: string;
   field_type: string;
   is_required?: boolean;
+  description?: string;
+  example?: string;
+  extraction_hint?: string;
+  is_identifier?: boolean;
 };
 
 export type EntityDefinition = {

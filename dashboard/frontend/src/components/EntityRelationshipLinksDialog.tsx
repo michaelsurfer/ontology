@@ -62,17 +62,24 @@ export function EntityRelationshipLinksDialog({
 
     void (async () => {
       try {
-        const [recordsResponse, subjectRowsResponse, objectRowsResponse] = await Promise.all([
-          ontologyApi.listRelationships(),
-          ontologyApi.listEntityRows(definition.subject_entity_id),
-          ontologyApi.listEntityRows(definition.object_entity_id),
-        ]);
+        const [recordsResponse, subjectEntityResponse, objectEntityResponse, subjectRowsResponse, objectRowsResponse] =
+          await Promise.all([
+            ontologyApi.listRelationships(),
+            ontologyApi.getEntity(definition.subject_entity_id),
+            ontologyApi.getEntity(definition.object_entity_id),
+            ontologyApi.listEntityRows(definition.subject_entity_id),
+            ontologyApi.listEntityRows(definition.object_entity_id),
+          ]);
 
         const links = buildResolvedRelationshipLinks(
           definition,
           recordsResponse.data,
-          buildRowLabelMap(subjectRowsResponse.data, subjectName),
-          buildRowLabelMap(objectRowsResponse.data, objectName),
+          buildRowLabelMap(
+            subjectRowsResponse.data,
+            subjectName,
+            subjectEntityResponse.data.fields,
+          ),
+          buildRowLabelMap(objectRowsResponse.data, objectName, objectEntityResponse.data.fields),
           subjectName,
           objectName,
         );

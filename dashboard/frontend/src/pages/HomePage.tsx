@@ -85,7 +85,7 @@ export function HomePage() {
     <Stack spacing={3}>
       <PageHeader
         title="Overview"
-        subtitle="Manage ontology schemas, row data, relationships, workflows, and RDF exports from a single control plane."
+        subtitle="Manage entity schemas, row data, relationships, workflows, and RDF exports from a single control plane."
       />
 
       <Alert severity={healthOk ? 'success' : 'warning'}>{healthMessage}</Alert>
@@ -118,7 +118,7 @@ export function HomePage() {
         <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
           <QuickLinkCard
             title="RDF graph"
-            description="Export Turtle and explore the knowledge graph."
+            description="Explore entity classes and properties as an interactive schema graph."
             to="/rdf-graph"
             icon={<AccountTreeOutlinedIcon />}
           />

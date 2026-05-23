@@ -14,6 +14,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Box, Button, Chip, Stack, Typography } from '@mui/material';
 import type { GraphViewModel } from '../types';
+import { rdfSchemaGraphNodeTypes } from './RdfSchemaGraphNodes';
 
 const nodeColors: Record<string, string> = {
   class: '#e3f2fd',
@@ -28,6 +29,7 @@ interface RdfGraphViewProps {
 interface FlowNodeData {
   label: string;
   kind: GraphViewModel['nodes'][number]['kind'];
+  entityId?: number;
 }
 
 // Collect the focused node plus every node linked by one edge (undirected).
@@ -56,9 +58,11 @@ function buildFlowNodes(graphNodes: GraphViewModel['nodes']): Node<FlowNodeData>
   const schemaNodes = graphNodes.filter((node) => node.kind !== 'instance');
   return schemaNodes.map((node, index) => ({
     id: node.id,
+    type: node.kind === 'class' ? 'rdfClass' : 'rdfProperty',
     data: {
-      label: `${node.label} (${node.kind})`,
+      label: node.label,
       kind: node.kind,
+      entityId: node.entityId,
     },
     position: {
       x: (index % 6) * 220,
@@ -66,12 +70,10 @@ function buildFlowNodes(graphNodes: GraphViewModel['nodes']): Node<FlowNodeData>
     },
     draggable: true,
     style: {
-      background: nodeColors[node.kind] || '#f5f5f5',
-      border: '1px solid #90a4ae',
-      borderRadius: 8,
-      padding: 8,
-      fontSize: 12,
-      width: 200,
+      background: 'transparent',
+      border: 'none',
+      padding: 0,
+      width: 'auto',
       cursor: 'pointer',
     },
   }));
@@ -85,12 +87,15 @@ function buildFlowEdges(
   return graphEdges
     .filter((edge) => schemaNodeIds.has(edge.source) && schemaNodeIds.has(edge.target))
     .map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    label: edge.label,
-    animated: edge.label === 'rdf:type',
-  }));
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+      animated: edge.label === 'rdf:type',
+      type: 'default',
+      style: { stroke: '#546e7a', strokeWidth: 1.5 },
+      labelStyle: { fontSize: 11, fill: '#37474f' },
+    }));
 }
 
 // Nodes and edges shown in the chart (classes and properties only).
@@ -158,7 +163,6 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
 
   const displayNodes = useMemo(() => {
     return flowNodes.map((node) => {
-      const nodeData = node.data as FlowNodeData;
       const isVisible = !visibleNodeIds || visibleNodeIds.has(node.id);
       const isFocused = focusedNodeId === node.id;
 
@@ -168,9 +172,6 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
         selected: isFocused,
         style: {
           ...node.style,
-          background: nodeColors[nodeData.kind] || '#f5f5f5',
-          border: isFocused ? '2px solid #1565c0' : '1px solid #90a4ae',
-          boxShadow: isFocused ? '0 0 0 3px rgba(21, 101, 192, 0.2)' : undefined,
           opacity: isVisible ? 1 : 0,
         },
       };
@@ -235,7 +236,7 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {focusedNodeId
           ? `Focused on "${focusedLabel}" — only directly linked nodes are shown. Click the background or "Show all nodes" to reset.`
-          : 'Click a node to show only that node and its direct connections. Drag nodes to rearrange.'}
+          : 'Click a node to show only that node and its direct connections. Use the storage icon on class nodes to open entity data. Drag nodes to rearrange.'}
       </Typography>
       <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
         <ReactFlow
@@ -248,6 +249,7 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
           nodesDraggable
           nodesConnectable={false}
           elementsSelectable
+          nodeTypes={rdfSchemaGraphNodeTypes}
           fitView
           fitViewOptions={{ padding: 0.15 }}
           minZoom={0.2}

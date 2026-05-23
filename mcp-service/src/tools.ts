@@ -23,7 +23,7 @@ function buildExportScope(entityIdsStar: boolean | undefined, entityIdList: stri
   return { entity_ids: '*' as const };
 }
 
-// Register all ontology MCP tools on the server.
+// Register all AnythingGraph MCP tools on the server.
 export function registerOntologyTools(server: McpServer): void {
   server.tool('health_check', 'Check data-layer-service and rdf-cache-service connectivity.', {}, async () => {
     try {
@@ -201,10 +201,10 @@ export function registerOntologyTools(server: McpServer): void {
   );
 
   server.resource(
-    'ontology_schema_summary',
-    'ontology://schema-summary',
+    'anythinggraph_schema_summary',
+    'anythinggraph://schema-summary',
     {
-      title: 'Ontology schema summary',
+      title: 'AnythingGraph schema summary',
       description: 'Entities and relationships from data-layer-service',
       mimeType: 'application/json',
     },
@@ -228,7 +228,7 @@ export function registerOntologyTools(server: McpServer): void {
       return {
         contents: [
           {
-            uri: 'ontology://schema-summary',
+            uri: 'anythinggraph://schema-summary',
             mimeType: 'application/json',
             text: JSON.stringify(summary, null, 2),
           },

@@ -6,7 +6,7 @@ import {
   getRdfCacheBaseUrl,
   syncRdfCacheFromDataLayer,
 } from './rdfCacheClient.js';
-import { buildGraphFromTurtle } from './turtleGraph.js';
+import { buildGraphFromTurtle, attachEntityIdsToClassNodes } from './turtleGraph.js';
 import type { TurtleExportRequest } from './types.js';
 import { getWorkflowDatabase } from './workflow/database.js';
 import { registerLandingZoneRoutes } from './landingZoneRoutes.js';
@@ -226,7 +226,9 @@ function startDashboardServer() {
       const exportBody: TurtleExportRequest =
         request.body && typeof request.body === 'object' ? request.body : { entity_ids: '*' };
       const turtleText = await dataLayerClient.exportTurtle(exportBody);
-      response.json(buildGraphFromTurtle(turtleText));
+      const entities = await dataLayerClient.listEntities();
+      const graph = buildGraphFromTurtle(turtleText);
+      response.json(attachEntityIdsToClassNodes(graph, entities));
     } catch (error) {
       response.status(400).json({ error: formatError(error) });
     }

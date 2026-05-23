@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type {
   EntityDefinition,
+  EntityFieldInput,
   EntityRelationshipDefinition,
   EntityRowRecord,
   EntitySummary,
@@ -30,7 +31,7 @@ export const ontologyApi = {
   createEntity: (body: {
     name: string;
     display_name?: string;
-    fields: Array<{ field_name: string; field_type: string; is_required?: boolean }>;
+    fields: Array<EntityFieldInput>;
   }) => apiClient.post<EntityDefinition>('/entities', body),
 
   updateEntity: (
@@ -38,7 +39,7 @@ export const ontologyApi = {
     body: {
       name?: string;
       display_name?: string;
-      fields?: Array<{ field_name: string; field_type: string; is_required?: boolean }>;
+      fields?: Array<EntityFieldInput>;
     },
   ) => apiClient.put<EntityDefinition>(`/entities/${entityId}`, body),
 

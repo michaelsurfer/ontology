@@ -359,11 +359,11 @@ export function runMcpInject({ rawBody }) {
   const nextAction = allowed
     ? {
         type: 'execute',
-        detail: 'Ontology guardrails passed; safe to proceed with tool execution in an integrated MCP host.',
+        detail: 'AnythingGraph guardrails passed; safe to proceed with tool execution in an integrated MCP host.',
       }
     : {
         type: 'reject',
-        reason: violations[0]?.reason || 'Ontology guardrail violation',
+        reason: violations[0]?.reason || 'AnythingGraph guardrail violation',
         rule_id: violations[0]?.rule_id ?? null,
         rule_name: violations[0]?.rule_name ?? null,
       }

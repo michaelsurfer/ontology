@@ -1,6 +1,6 @@
 # ontox (Python)
 
-Python SDK for the OntoX ontology platform.
+Python SDK for the AnythingGraph platform.
 
 ## Quick start
 

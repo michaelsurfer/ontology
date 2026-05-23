@@ -11,7 +11,7 @@ import {
 
 const mcpConfigExample = `{
   "mcpServers": {
-    "ontology": {
+    "anythinggraph": {
       "command": "node",
       "args": ["<absolute-path>/ontology/mcp-service/dist/index.js"],
       "env": {
@@ -24,7 +24,7 @@ const mcpConfigExample = `{
 
 const mcpDevConfigExample = `{
   "mcpServers": {
-    "ontology": {
+    "anythinggraph": {
       "command": "npx",
       "args": ["tsx", "<absolute-path>/ontology/mcp-service/src/index.ts"],
       "env": {
@@ -57,7 +57,7 @@ export function McpSettingsPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             In Cursor, open <strong>Settings → MCP</strong> or create a project file at{' '}
             <code>.cursor/mcp.json</code> in your repo root. Replace{' '}
-            <code>&lt;absolute-path&gt;</code> with the full path to this ontology repository.
+            <code>&lt;absolute-path&gt;</code> with the full path to this AnythingGraph repository.
           </Typography>
           <Box
             component="pre"
@@ -121,7 +121,7 @@ export function McpSettingsPage() {
             </li>
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Resource: <code>ontology://schema-summary</code> — JSON snapshot of entities and
+            Resource: <code>anythinggraph://schema-summary</code> — JSON snapshot of entities and
             relationships.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>

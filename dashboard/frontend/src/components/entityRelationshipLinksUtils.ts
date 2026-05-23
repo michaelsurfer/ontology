@@ -37,19 +37,29 @@ function formatRowFieldValue(value: unknown): string | null {
   return null;
 }
 
-// Human-readable label for one entity row (prefers the "name" field, then any other field).
+// Human-readable label for one entity row (identifier field, then "name", then any value).
 export function formatEntityRowLabel(
   row: EntityRowRecord,
   entityName: string,
-  labelFieldName: string = defaultRowLabelFieldName,
+  fieldDefinitions?: Array<{ field_name: string; is_identifier?: boolean }>,
 ): string {
-  const preferredValue = formatRowFieldValue(row.values[labelFieldName]);
+  if (fieldDefinitions && fieldDefinitions.length > 0) {
+    const identifierField = fieldDefinitions.find((field) => field.is_identifier);
+    if (identifierField) {
+      const identifierValue = formatRowFieldValue(row.values[identifierField.field_name]);
+      if (identifierValue) {
+        return identifierValue;
+      }
+    }
+  }
+
+  const preferredValue = formatRowFieldValue(row.values[defaultRowLabelFieldName]);
   if (preferredValue) {
     return preferredValue;
   }
 
   for (const [fieldName, value] of Object.entries(row.values)) {
-    if (fieldName === labelFieldName) {
+    if (fieldName === defaultRowLabelFieldName) {
       continue;
     }
     const formatted = formatRowFieldValue(value);
@@ -65,10 +75,11 @@ export function formatEntityRowLabel(
 export function buildRowLabelMap(
   rows: EntityRowRecord[],
   entityName: string,
+  fieldDefinitions?: Array<{ field_name: string; is_identifier?: boolean }>,
 ): Map<number, string> {
   const labelMap = new Map<number, string>();
   for (const row of rows) {
-    labelMap.set(row.id, formatEntityRowLabel(row, entityName));
+    labelMap.set(row.id, formatEntityRowLabel(row, entityName, fieldDefinitions));
   }
   return labelMap;
 }

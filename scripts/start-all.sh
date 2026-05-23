@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start ontology platform services for local development.
+# Start AnythingGraph platform services for local development.
 # Usage: ./scripts/start-all.sh
 # Press Ctrl+C to stop all services.
 
@@ -82,7 +82,7 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Ontology — starting all services from ${ROOT_DIR}"
+echo "AnythingGraph — starting all services from ${ROOT_DIR}"
 echo ""
 
 # 1–2: Rust services (dashboard and MCP depend on these URLs).

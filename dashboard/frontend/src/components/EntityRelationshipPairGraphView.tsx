@@ -61,7 +61,7 @@ function buildPairGraphModel(links: ResolvedRelationshipLink[]): GraphViewModel 
     label: link.relationshipName,
   }));
 
-  return { nodes, edges, turtlePreview: '' };
+  return { nodes, edges };
 }
 
 // Place subject rows on the left and object rows on the right.

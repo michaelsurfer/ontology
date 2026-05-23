@@ -90,7 +90,15 @@ export const dataLayerClient = {
   createEntity: (body: {
     name: string;
     display_name?: string;
-    fields: Array<{ field_name: string; field_type: string; is_required?: boolean }>;
+    fields: Array<{
+      field_name: string;
+      field_type: string;
+      is_required?: boolean;
+      description?: string;
+      example?: string;
+      extraction_hint?: string;
+      is_identifier?: boolean;
+    }>;
   }) => requestJson<EntityDefinition>('POST', '/entities', body),
 
   updateEntity: (
@@ -98,7 +106,15 @@ export const dataLayerClient = {
     body: {
       name?: string;
       display_name?: string;
-      fields?: Array<{ field_name: string; field_type: string; is_required?: boolean }>;
+      fields?: Array<{
+        field_name: string;
+        field_type: string;
+        is_required?: boolean;
+        description?: string;
+        example?: string;
+        extraction_hint?: string;
+        is_identifier?: boolean;
+      }>;
     },
   ) => requestJson<EntityDefinition>('PUT', `/entities/${entityId}`, body),
 

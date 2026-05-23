@@ -1,107 +1,75 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
-  Button,
+  Box,
   Card,
   CardContent,
+  CircularProgress,
   Stack,
-  TextField,
+  Typography,
 } from '@mui/material';
 import { ontologyApi } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
 import { RdfGraphView } from '../components/RdfGraphView';
-import { TurtlePreviewPanel } from '../components/TurtlePreviewPanel';
 import type { GraphViewModel } from '../types';
 
 export function RdfGraphPage() {
-  const [entityNamesText, setEntityNamesText] = useState('');
-  const [entityIdsText, setEntityIdsText] = useState('*');
   const [graph, setGraph] = useState<GraphViewModel | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    void loadGraph({ entity_ids: '*' });
+    void loadGraph();
   }, []);
 
-  async function loadGraph(body: { entity_ids?: '*' | number[]; entity_names?: string[] }) {
+  async function loadGraph() {
     setLoading(true);
     try {
-      const response = await ontologyApi.fetchRdfGraph(body);
+      const response = await ontologyApi.fetchRdfGraph({ entity_ids: '*' });
       setGraph(response.data);
       setErrorMessage('');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load RDF graph');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to load schema graph');
       setGraph(null);
     } finally {
       setLoading(false);
     }
   }
 
-  function handleRefresh() {
-    const trimmedNames = entityNamesText
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean);
-
-    if (trimmedNames.length > 0) {
-      void loadGraph({ entity_names: trimmedNames });
-      return;
-    }
-
-    const trimmedIds = entityIdsText.trim();
-    if (trimmedIds === '*') {
-      void loadGraph({ entity_ids: '*' });
-      return;
-    }
-
-    const idList = trimmedIds
-      .split(',')
-      .map((part) => Number(part.trim()))
-      .filter((value) => Number.isFinite(value));
-
-    if (idList.length > 0) {
-      void loadGraph({ entity_ids: idList });
-      return;
-    }
-
-    void loadGraph({ entity_ids: '*' });
-  }
-
   return (
     <Stack spacing={2}>
       <PageHeader
         title="RDF graph"
-        subtitle="Export Turtle from the data layer and explore classes and properties as an interactive schema graph."
+        subtitle="Explore entity classes and relationship properties as an interactive schema graph."
       />
-
-      <Card variant="outlined">
-        <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap>
-            <TextField
-              label="Entity ids (comma-separated or *)"
-              value={entityIdsText}
-              onChange={(event) => setEntityIdsText(event.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Entity names (comma-separated, optional)"
-              value={entityNamesText}
-              onChange={(event) => setEntityNamesText(event.target.value)}
-              fullWidth
-            />
-            <Button variant="contained" onClick={handleRefresh} disabled={loading} sx={{ minWidth: 140 }}>
-              {loading ? 'Loading…' : 'Refresh graph'}
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 
-      {graph ? <RdfGraphView graph={graph} /> : null}
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Schema graph
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Classes (entity types) and properties (relationships between types). Click a node to
+            focus on its direct connections; drag nodes to rearrange the layout.
+          </Typography>
 
-      {graph ? <TurtlePreviewPanel turtleText={graph.turtlePreview} /> : null}
+          {loading && !graph ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : null}
+
+          {!loading && graph ? <RdfGraphView graph={graph} /> : null}
+
+          {!loading && !graph && !errorMessage ? (
+            <Typography variant="body2" color="text.secondary">
+              No schema graph data yet.
+            </Typography>
+          ) : null}
+        </CardContent>
+      </Card>
     </Stack>
   );
 }

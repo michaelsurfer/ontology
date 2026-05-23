@@ -1,6 +1,6 @@
-# Ontology Platform
+# AnythingGraph
 
-This repo is an ontology / context-layer MVP: custom entities in SQLite, OWL-style mappings, relationships (including SQL link tables), RDF Turtle export, SHACL rules, and **Query Studio** (natural language → SPARQL → results).
+AnythingGraph is a graph / context-layer platform: custom entities in SQLite, OWL-style mappings, relationships (including SQL link tables), RDF Turtle export, SHACL rules, and **Query Studio** (natural language → SPARQL → results).
 
 ## Architecture (high level)
 

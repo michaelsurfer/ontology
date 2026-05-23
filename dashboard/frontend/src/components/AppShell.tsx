@@ -3,7 +3,6 @@ import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Box,
-  Chip,
   Divider,
   Drawer,
   List,
@@ -89,7 +88,7 @@ function resolveTopBarTitle(pathname: string): string {
   if (settingsMatch) {
     return settingsMatch.label;
   }
-  return 'Ontology platform';
+  return 'AnythingGraph';
 }
 
 // Enterprise shell: dark sidebar navigation and light content workspace.
@@ -136,10 +135,10 @@ export function AppShell() {
             </Box>
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#f8fafc', lineHeight: 1.2 }}>
-                Ontology
+                AnythingGraph
               </Typography>
               <Typography variant="caption" sx={{ color: sidebarPalette.textMuted }}>
-                Data layer platform
+                Graph data platform
               </Typography>
             </Box>
           </Box>
@@ -198,7 +197,6 @@ export function AppShell() {
             <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600, fontSize: '1.0625rem' }}>
               {topBarTitle}
             </Typography>
-            <Chip label="Enterprise" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
           </Toolbar>
         </AppBar>
 

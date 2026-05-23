@@ -1,6 +1,6 @@
-# Ontology Dashboard
+# AnythingGraph Dashboard
 
-TypeScript dashboard for managing ontology data through **data-layer-service** (port `8182`).
+TypeScript dashboard for managing graph data through **data-layer-service** (port `8182`).
 
 ## Stack
 
@@ -79,7 +79,7 @@ All under `/api/*`, proxied to data-layer-service:
 - `GET/POST/PUT/DELETE /api/entity-relationships`
 - `GET/POST/PUT/DELETE /api/relationships`
 - `POST /api/rdf/turtle` — raw Turtle text
-- `POST /api/rdf/graph` — `{ nodes, edges, turtlePreview }` for the graph view
+- `POST /api/rdf/graph` — `{ nodes, edges }` schema graph for the RDF explorer
 - `POST /api/rdf/sync-cache` — export Turtle from data-layer, then `POST /cache/load` on rdf-cache-service
 - `GET/POST/PUT/DELETE /api/workflows` — workflow CRUD (graph stored in SQLite)
 - `POST /api/workflows/:id/run` — execute canvas pipeline (`dry_run` supported)

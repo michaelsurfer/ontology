@@ -6,6 +6,10 @@ export interface EntityFieldDefinition {
   field_type: FieldType;
   is_required: boolean;
   is_active: boolean;
+  description: string;
+  example: string;
+  extraction_hint: string;
+  is_identifier: boolean;
 }
 
 export interface EntityDefinition {
@@ -55,6 +59,7 @@ export interface GraphNode {
   id: string;
   label: string;
   kind: 'class' | 'instance' | 'property';
+  entityId?: number;
 }
 
 export interface GraphEdge {
@@ -67,5 +72,4 @@ export interface GraphEdge {
 export interface GraphViewModel {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  turtlePreview: string;
 }

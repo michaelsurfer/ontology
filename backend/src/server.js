@@ -137,7 +137,7 @@ async function refreshRustRdfCacheBestEffort() {
   }
 }
 
-/* Start the Express server that powers the ontology platform API. */
+/* Start the Express server that powers the AnythingGraph platform API. */
 function startServer() {
   initializeDatabase()
 

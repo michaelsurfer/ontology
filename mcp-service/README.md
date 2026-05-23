@@ -1,4 +1,4 @@
-# Ontology MCP Service
+# AnythingGraph MCP Service
 
 TypeScript [Model Context Protocol](https://modelcontextprotocol.io/) server (stdio) for external AI agents (Cursor, Claude Desktop, etc.). Talks directly to **data-layer-service** and **rdf-cache-service** — not the dashboard UI.
 
@@ -53,7 +53,7 @@ Copy `.env.example` if you run with custom URLs (MCP hosts pass `env` in config)
 
 ## Resource
 
-- `ontology://schema-summary` — JSON snapshot of entities and relationships
+- `anythinggraph://schema-summary` — JSON snapshot of entities and relationships
 
 ## Cursor configuration
 
@@ -62,7 +62,7 @@ Add to Cursor **Settings → MCP** (or project `.cursor/mcp.json`), using the **
 ```json
 {
   "mcpServers": {
-    "ontology": {
+    "anythinggraph": {
       "command": "node",
       "args": ["/absolute/path/to/ontology/mcp-service/dist/index.js"],
       "env": {
@@ -79,7 +79,7 @@ For development without a build step:
 ```json
 {
   "mcpServers": {
-    "ontology": {
+    "anythinggraph": {
       "command": "npx",
       "args": ["tsx", "/absolute/path/to/ontology/mcp-service/src/index.ts"],
       "env": {
@@ -91,12 +91,12 @@ For development without a build step:
 }
 ```
 
-Replace `/absolute/path/to/ontology` with your repo path.
+Replace `/absolute/path/to/ontology` with your repo path (folder name may still be `ontology` on disk).
 
 ## Typical agent workflow
 
 1. `health_check`
-2. `list_entities` or read resource `ontology://schema-summary`
+2. `list_entities` or read resource `anythinggraph://schema-summary`
 3. Mutate data via `create_entity_row` (etc.) if needed
 4. `sync_rdf_cache` or `run_sparql` (which syncs by default)
 5. `run_sparql` with `sync_cache_before: false` for follow-up queries on unchanged data

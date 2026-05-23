@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Button,
   Card,
@@ -9,10 +12,26 @@ import {
   Typography,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { EntityFieldsMetadataTable } from '../components/EntityFieldsMetadataTable';
+import { PageHeader } from '../components/PageHeader';
 import { EntityRowDataTable } from '../components/EntityRowDataTable';
 import { EntityStructureDialog } from '../components/EntityStructureDialog';
 import { ontologyApi } from '../api/client';
-import type { EntityDefinition, EntityRowRecord } from '../types';
+import type { EntityDefinition, EntityFieldDefinition, EntityRowRecord } from '../types';
+
+// Count fields that have any AI metadata filled in.
+function countFieldsWithMetadata(fields: EntityFieldDefinition[]): number {
+  return fields.filter(
+    (field) =>
+      field.is_active !== false &&
+      Boolean(
+        String(field.description || '').trim() ||
+          String(field.example || '').trim() ||
+          String(field.extraction_hint || '').trim(),
+      ),
+  ).length;
+}
 
 export function EntityDetailPage() {
   const { entityId: entityIdRaw } = useParams();
@@ -72,45 +91,45 @@ export function EntityDetailPage() {
     return <Typography>Loading entity…</Typography>;
   }
 
+  const activeFieldCount = entity.fields.filter((field) => field.is_active !== false).length;
+  const metadataFieldCount = countFieldsWithMetadata(entity.fields);
+
   return (
     <Stack spacing={2}>
-      <Typography variant="h4" sx={{ fontWeight: 700 }}>
-        {entity.display_name}
-      </Typography>
-      <Typography color="text.secondary">
-        Entity <strong>{entity.name}</strong> (id {entity.id})
-      </Typography>
+      <PageHeader
+        title={entity.display_name}
+        subtitle={`Entity ${entity.name} (id ${entity.id})`}
+        actions={
+          <Button
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={() => setStructureDialogOpen(true)}
+          >
+            Edit structure
+          </Button>
+        }
+      />
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 
-      <Card variant="outlined">
-        <CardContent>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 1 }}
-          >
-            <Typography variant="h6">Fields</Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<EditIcon />}
-              onClick={() => setStructureDialogOpen(true)}
-            >
-              Edit structure
-            </Button>
+      <Accordion defaultExpanded={false} disableGutters elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Stack spacing={0.25}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Field metadata
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {activeFieldCount} field{activeFieldCount === 1 ? '' : 's'}
+              {metadataFieldCount > 0
+                ? ` · ${metadataFieldCount} with AI metadata`
+                : ' · expand to view descriptions and extraction hints'}
+            </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
-            {entity.fields
-              .map((field) => {
-                const requiredLabel = field.is_required ? ', required' : '';
-                return `${field.field_name} (${field.field_type}${requiredLabel})`;
-              })
-              .join(', ')}
-          </Typography>
-        </CardContent>
-      </Card>
+        </AccordionSummary>
+        <AccordionDetails sx={{ pt: 0, overflowX: 'auto' }}>
+          <EntityFieldsMetadataTable fields={entity.fields} />
+        </AccordionDetails>
+      </Accordion>
 
       <Typography variant="h6">Row data</Typography>
 

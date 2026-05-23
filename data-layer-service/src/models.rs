@@ -8,6 +8,18 @@ pub struct EntityFieldDefinition {
     pub field_type: String,
     pub is_required: bool,
     pub is_active: bool,
+    /// Human-readable description for AI extraction and documentation.
+    #[serde(default)]
+    pub description: String,
+    /// Example value shown to agents when mapping incoming data.
+    #[serde(default)]
+    pub example: String,
+    /// Hint for how to locate or format this field in source documents.
+    #[serde(default)]
+    pub extraction_hint: String,
+    /// When true, this field is the primary business identifier for rows.
+    #[serde(default)]
+    pub is_identifier: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +85,10 @@ pub struct CreateEntityFieldRequest {
     pub field_name: String,
     pub field_type: String,
     pub is_required: Option<bool>,
+    pub description: Option<String>,
+    pub example: Option<String>,
+    pub extraction_hint: Option<String>,
+    pub is_identifier: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "MCP server for ontology data-layer and RDF cache (stdio)",
+  "description": "MCP server for AnythingGraph data-layer and RDF cache (stdio)",
   "bin": {
-    "ontology-mcp": "./dist/index.js"
+    "anythinggraph-mcp": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",

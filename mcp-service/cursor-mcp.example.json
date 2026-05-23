@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "ontology": {
+    "anythinggraph": {
       "command": "node",
       "args": ["/absolute/path/to/ontology/mcp-service/dist/index.js"],
       "env": {

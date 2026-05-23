@@ -543,6 +543,12 @@ impl DataStore {
             request.object_entity_id,
             request.object_row_id,
         )?;
+        self.ensure_entity_relationship_defined(
+            &write_transaction,
+            request.subject_entity_id,
+            request.object_entity_id,
+            &relationship_name,
+        )?;
 
         let mut counters = self.read_counters(&write_transaction)?;
         let relationship_id = counters.next_relationship_id;
@@ -609,6 +615,12 @@ impl DataStore {
             &write_transaction,
             next_object_entity_id,
             next_object_row_id,
+        )?;
+        self.ensure_entity_relationship_defined(
+            &write_transaction,
+            next_subject_entity_id,
+            next_object_entity_id,
+            &relationship_record.relationship_name,
         )?;
 
         relationship_record.subject_entity_id = next_subject_entity_id;
@@ -1152,6 +1164,29 @@ impl DataStore {
         Ok(false)
     }
 
+    // Require a schema-level entity relationship before allowing row-level instance links.
+    fn ensure_entity_relationship_defined(
+        &self,
+        transaction: &RwTxn,
+        subject_entity_id: u64,
+        object_entity_id: u64,
+        relationship_name: &str,
+    ) -> Result<(), StoreError> {
+        if self.entity_relationship_exists(
+            transaction,
+            subject_entity_id,
+            object_entity_id,
+            relationship_name,
+            None,
+        )? {
+            return Ok(());
+        }
+
+        Err(StoreError::BadRequest(format!(
+            "No entity relationship defined for \"{relationship_name}\" (subject_entity_id={subject_entity_id}, object_entity_id={object_entity_id}). Create it first via POST /entity-relationships."
+        )))
+    }
+
     fn ensure_entity_exists(&self, transaction: &RwTxn, entity_id: u64) -> Result<(), StoreError> {
         if self.read_entity_definition(transaction, entity_id)?.is_some() {
             return Ok(());
@@ -1189,6 +1224,10 @@ fn build_field_definitions(
             field_type: field.field_type,
             is_required: field.is_required,
             is_active: true,
+            description: field.description,
+            example: field.example,
+            extraction_hint: field.extraction_hint,
+            is_identifier: field.is_identifier,
         });
     }
     field_definitions
@@ -1198,6 +1237,10 @@ struct NormalizedFieldRequest {
     field_name: String,
     field_type: String,
     is_required: bool,
+    description: String,
+    example: String,
+    extraction_hint: String,
+    is_identifier: bool,
 }
 
 // Normalize and validate field definitions for entity create/update.
@@ -1212,6 +1255,7 @@ fn normalize_field_requests(
 
     let mut normalized_fields = Vec::new();
     let mut seen_names = std::collections::HashSet::new();
+    let mut identifier_field_count = 0usize;
 
     for field_request in field_requests {
         let field_name = normalize_field_name(&field_request.field_name)?;
@@ -1221,14 +1265,34 @@ fn normalize_field_requests(
             )));
         }
 
+        let is_identifier = field_request.is_identifier.unwrap_or(false);
+        if is_identifier {
+            identifier_field_count += 1;
+        }
+
         normalized_fields.push(NormalizedFieldRequest {
             field_name,
             field_type: normalize_field_type(&field_request.field_type)?,
             is_required: field_request.is_required.unwrap_or(false),
+            description: normalize_optional_text(field_request.description.as_deref()),
+            example: normalize_optional_text(field_request.example.as_deref()),
+            extraction_hint: normalize_optional_text(field_request.extraction_hint.as_deref()),
+            is_identifier,
         });
     }
 
+    if identifier_field_count > 1 {
+        return Err(StoreError::BadRequest(
+            "Only one field may be marked as the identifier (is_identifier)".to_string(),
+        ));
+    }
+
     Ok(normalized_fields)
+}
+
+// Trim optional metadata strings from API requests.
+fn normalize_optional_text(raw_value: Option<&str>) -> String {
+    raw_value.unwrap_or("").trim().to_string()
 }
 
 // Normalize row values against active entity fields.
