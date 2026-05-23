@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardContent,
@@ -18,10 +17,10 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
+import { PageHeader } from '../components/PageHeader';
 import { EntityRelationshipLinksDialog } from '../components/EntityRelationshipLinksDialog';
 import { ontologyApi } from '../api/client';
 import type { EntityRelationshipDefinition, EntitySummary } from '../types';
@@ -104,20 +103,15 @@ export function EntityRelationshipsPage() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Entity relationships
-          </Typography>
-          <Typography color="text.secondary">
-            Schema-level links between entity types. Use View links to see how rows connect (e.g.
-            Employee A works at Company B).
-          </Typography>
-        </Box>
-        <Button variant="contained" onClick={() => setDialogOpen(true)}>
-          New relationship
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Entity relationships"
+        subtitle="Schema-level links between entity types. Use View links to see how rows connect (e.g. Employee A works at Company B)."
+        actions={
+          <Button variant="contained" onClick={() => setDialogOpen(true)}>
+            New relationship
+          </Button>
+        }
+      />
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 

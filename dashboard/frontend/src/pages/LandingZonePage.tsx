@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { PageHeader } from '../components/PageHeader';
 import { ontologyApi } from '../api/client';
 
 type LandingZoneRow = {
@@ -64,20 +65,15 @@ export function LandingZonePage() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Landing zone
-          </Typography>
-          <Typography color="text.secondary">
-            Records that failed entity mapping and were sent to the landing zone from workflow
-            fallback nodes.
-          </Typography>
-        </Box>
-        <Button variant="outlined" onClick={() => void reloadLandingZone()}>
-          Refresh
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Landing zone"
+        subtitle="Records that failed workflow processing and were quarantined from fallback nodes."
+        actions={
+          <Button variant="outlined" onClick={() => void reloadLandingZone()}>
+            Refresh
+          </Button>
+        }
+      />
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 
@@ -96,27 +92,49 @@ export function LandingZonePage() {
             </TableHead>
             <TableBody>
               {records.map((record) => (
-                <TableRow key={record.id} hover>
-                  <TableCell>{new Date(record.created_at_ms).toLocaleString()}</TableCell>
-                  <TableCell>{record.workflow_name || '—'}</TableCell>
-                  <TableCell>{record.run_id ?? '—'}</TableCell>
-                  <TableCell>{record.reason}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      onClick={() =>
-                        setExpandedRecordId(expandedRecordId === record.id ? null : record.id)
-                      }
-                    >
-                      {expandedRecordId === record.id ? 'Hide' : 'View'} JSON
-                    </Button>
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton color="error" onClick={() => void handleDeleteRecord(record.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
+                <Fragment key={record.id}>
+                  <TableRow hover>
+                    <TableCell>{new Date(record.created_at_ms).toLocaleString()}</TableCell>
+                    <TableCell>{record.workflow_name || '—'}</TableCell>
+                    <TableCell>{record.run_id ?? '—'}</TableCell>
+                    <TableCell>{record.reason}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          setExpandedRecordId(expandedRecordId === record.id ? null : record.id)
+                        }
+                      >
+                        {expandedRecordId === record.id ? 'Hide' : 'View'} JSON
+                      </Button>
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton color="error" onClick={() => void handleDeleteRecord(record.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                  {expandedRecordId === record.id ? (
+                    <TableRow>
+                      <TableCell colSpan={6} sx={{ py: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <Box
+                          component="pre"
+                          sx={{
+                            m: 0,
+                            my: 1,
+                            p: 2,
+                            bgcolor: 'grey.100',
+                            borderRadius: 1,
+                            overflow: 'auto',
+                            fontSize: 12,
+                          }}
+                        >
+                          {JSON.stringify(record.payload, null, 2)}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
               ))}
               {records.length === 0 ? (
                 <TableRow>
@@ -132,33 +150,6 @@ export function LandingZonePage() {
           </Table>
         </CardContent>
       </Card>
-
-      {expandedRecordId !== null ? (
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-              Record #{expandedRecordId}
-            </Typography>
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                p: 2,
-                bgcolor: 'grey.100',
-                borderRadius: 1,
-                overflow: 'auto',
-                fontSize: 12,
-              }}
-            >
-              {JSON.stringify(
-                records.find((record) => record.id === expandedRecordId)?.payload ?? {},
-                null,
-                2,
-              )}
-            </Box>
-          </CardContent>
-        </Card>
-      ) : null}
     </Stack>
   );
 }

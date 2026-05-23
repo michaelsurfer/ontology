@@ -11,6 +11,16 @@ export type RelationshipLinkPlan = {
   evidence: string;
 };
 
+export type RelationshipLinkFailure = {
+  recordIndex: number;
+  reason: string;
+};
+
+export type RelationshipLinkPlanningResult = {
+  plans: RelationshipLinkPlan[];
+  failures: RelationshipLinkFailure[];
+};
+
 // Resolve object row id by matching a payload field value to a field on existing object rows.
 export function findObjectRowIdByFieldMapping(
   payloadObject: Record<string, unknown>,
@@ -54,7 +64,7 @@ export function findObjectRowIdByFieldMapping(
   return matchedRow?.id ?? null;
 }
 
-// Build relationship link plans using an explicit entity relationship and field mapping.
+// Build relationship link plans and per-record failures using an explicit entity relationship.
 export function planRelationshipLinks(options: {
   records: Record<string, unknown>[];
   recordEntityRows: RecordEntityRows;
@@ -62,20 +72,29 @@ export function planRelationshipLinks(options: {
   payloadLinkField: string;
   objectEntityField: string;
   objectRowsCache: Map<number, EntityRowRecord[]>;
-}): RelationshipLinkPlan[] {
+  skipRecordIndexes?: Set<number>;
+}): RelationshipLinkPlanningResult {
   const plans: RelationshipLinkPlan[] = [];
+  const failures: RelationshipLinkFailure[] = [];
   const subjectEntityId = options.relationshipDefinition.subject_entity_id;
   const objectEntityId = options.relationshipDefinition.object_entity_id;
   const relationshipName = options.relationshipDefinition.relationship_name;
+  const skipRecordIndexes = options.skipRecordIndexes || new Set<number>();
 
   for (let recordIndex = 0; recordIndex < options.records.length; recordIndex += 1) {
+    if (skipRecordIndexes.has(recordIndex)) {
+      continue;
+    }
+
     const perRecord = options.recordEntityRows[recordIndex];
     if (!perRecord) {
+      failures.push({ recordIndex, reason: 'no_entity_rows_for_record' });
       continue;
     }
 
     const subjectEntry = Object.values(perRecord).find((entry) => entry.entityId === subjectEntityId);
-    if (!subjectEntry?.rowId) {
+    if (!subjectEntry?.rowId || subjectEntry.rowId <= 0) {
+      failures.push({ recordIndex, reason: 'missing_subject_row' });
       continue;
     }
 
@@ -90,6 +109,7 @@ export function planRelationshipLinks(options: {
     );
 
     if (!objectRowId) {
+      failures.push({ recordIndex, reason: 'Failed to find object' });
       continue;
     }
 
@@ -104,5 +124,5 @@ export function planRelationshipLinks(options: {
     });
   }
 
-  return plans;
+  return { plans, failures };
 }

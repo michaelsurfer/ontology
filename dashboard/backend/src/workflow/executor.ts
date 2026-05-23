@@ -233,7 +233,7 @@ export async function executeWorkflowGraph(options: {
 
           if (!recordMapped) {
             failedRecordIndexes.add(recordIndex);
-            recordFailureReasons.set(recordIndex, 'entity_mapping_failed');
+            recordFailureReasons.set(recordIndex, 'Failed to map record to entity');
           }
         }
 
@@ -264,6 +264,16 @@ export async function executeWorkflowGraph(options: {
         const entityRelationshipId = Number(relationshipsData.entityRelationshipId);
         const payloadLinkField = String(relationshipsData.payloadLinkField || '').trim();
         const objectEntityField = String(relationshipsData.objectEntityField || '').trim();
+        let relationshipFailCount = 0;
+
+        const markRelationshipFailure = (recordIndex: number, reason: string) => {
+          if (failedRecordIndexes.has(recordIndex)) {
+            return;
+          }
+          failedRecordIndexes.add(recordIndex);
+          recordFailureReasons.set(recordIndex, `Failed to create relationship: ${reason}`);
+          relationshipFailCount += 1;
+        };
 
         if (!Number.isFinite(entityRelationshipId) || entityRelationshipId <= 0) {
           nodeLogs.push({
@@ -271,18 +281,27 @@ export async function executeWorkflowGraph(options: {
             nodeType: 'relationships',
             message: 'Relationships node requires an entity relationship to be selected',
           });
+          for (let recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+            markRelationshipFailure(recordIndex, 'config_missing_entity_relationship');
+          }
         } else if (!payloadLinkField) {
           nodeLogs.push({
             nodeId: workflowNode.id,
             nodeType: 'relationships',
             message: 'Relationships node requires an incoming JSON field for object lookup',
           });
+          for (let recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+            markRelationshipFailure(recordIndex, 'config_missing_payload_field');
+          }
         } else if (!objectEntityField) {
           nodeLogs.push({
             nodeId: workflowNode.id,
             nodeType: 'relationships',
             message: 'Relationships node requires an object entity field for matching',
           });
+          for (let recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+            markRelationshipFailure(recordIndex, 'config_missing_object_field');
+          }
         } else {
           const allDefinitions = await dataLayerClient.listEntityRelationships();
           const relationshipDefinition = allDefinitions.find(
@@ -295,6 +314,9 @@ export async function executeWorkflowGraph(options: {
               nodeType: 'relationships',
               message: `Entity relationship id ${entityRelationshipId} not found`,
             });
+            for (let recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+              markRelationshipFailure(recordIndex, 'config_entity_relationship_not_found');
+            }
           } else {
             const objectRowsCache = new Map<number, EntityRowRecord[]>();
             objectRowsCache.set(
@@ -302,28 +324,54 @@ export async function executeWorkflowGraph(options: {
               await dataLayerClient.listEntityRows(relationshipDefinition.object_entity_id),
             );
 
-            const linkPlans = planRelationshipLinks({
+            const planningResult = planRelationshipLinks({
               records,
               recordEntityRows,
               relationshipDefinition,
               payloadLinkField,
               objectEntityField,
               objectRowsCache,
+              skipRecordIndexes: failedRecordIndexes,
             });
 
+            for (const linkFailure of planningResult.failures) {
+              markRelationshipFailure(linkFailure.recordIndex, linkFailure.reason);
+              relationshipResults.push({
+                recordIndex: linkFailure.recordIndex,
+                relationshipName: relationshipDefinition.relationship_name,
+                subjectEntityId: relationshipDefinition.subject_entity_id,
+                objectEntityId: relationshipDefinition.object_entity_id,
+                subjectRowId: 0,
+                objectRowId: 0,
+                ok: false,
+                reason: linkFailure.reason,
+                dryRun: options.dryRun,
+              });
+            }
+
             let createdLinks = 0;
-            for (const linkPlan of linkPlans) {
+            for (const linkPlan of planningResult.plans) {
               let relationshipId: number | undefined;
+              let createOk = true;
+              let createReason: string | undefined;
+
               if (!options.dryRun) {
-                const created = await dataLayerClient.createRelationship({
-                  relationship_name: linkPlan.relationshipName,
-                  subject_entity_id: linkPlan.subjectEntityId,
-                  object_entity_id: linkPlan.objectEntityId,
-                  subject_row_id: linkPlan.subjectRowId,
-                  object_row_id: linkPlan.objectRowId,
-                });
-                relationshipId = created.id;
-                createdLinks += 1;
+                try {
+                  const created = await dataLayerClient.createRelationship({
+                    relationship_name: linkPlan.relationshipName,
+                    subject_entity_id: linkPlan.subjectEntityId,
+                    object_entity_id: linkPlan.objectEntityId,
+                    subject_row_id: linkPlan.subjectRowId,
+                    object_row_id: linkPlan.objectRowId,
+                  });
+                  relationshipId = created.id;
+                  createdLinks += 1;
+                } catch (error) {
+                  createOk = false;
+                  createReason =
+                    error instanceof Error ? error.message : 'relationship_create_failed';
+                  markRelationshipFailure(linkPlan.recordIndex, 'create_failed');
+                }
               }
 
               relationshipResults.push({
@@ -333,7 +381,8 @@ export async function executeWorkflowGraph(options: {
                 objectEntityId: linkPlan.objectEntityId,
                 subjectRowId: linkPlan.subjectRowId,
                 objectRowId: linkPlan.objectRowId,
-                ok: true,
+                ok: createOk,
+                reason: createReason,
                 relationshipId,
                 dryRun: options.dryRun,
               });
@@ -342,12 +391,27 @@ export async function executeWorkflowGraph(options: {
             nodeLogs.push({
               nodeId: workflowNode.id,
               nodeType: 'relationships',
-              message: `Relationships (${relationshipDefinition.relationship_name}): ${payloadLinkField} → object.${objectEntityField}; planned ${linkPlans.length} link(s), created ${createdLinks}`,
+              message: `Relationships (${relationshipDefinition.relationship_name}): ${payloadLinkField} → object.${objectEntityField}; ${planningResult.plans.length} linked, ${relationshipFailCount} failed`,
             });
           }
         }
 
-        nextNodeIds.push(...getOutgoingEdges(options.graph, workflowNode.id).map((edge) => edge.target));
+        const successTargets = getOutgoingEdges(options.graph, workflowNode.id, 'success').map(
+          (edge) => edge.target,
+        );
+        const failureTargets = getOutgoingEdges(options.graph, workflowNode.id, 'failure').map(
+          (edge) => edge.target,
+        );
+
+        if (successTargets.length > 0) {
+          nextNodeIds.push(...successTargets);
+        }
+        if (failureTargets.length > 0 && relationshipFailCount > 0) {
+          nextNodeIds.push(...failureTargets);
+        } else if (successTargets.length === 0 && failureTargets.length === 0) {
+          const defaultTargets = getOutgoingEdges(options.graph, workflowNode.id).map((edge) => edge.target);
+          nextNodeIds.push(...defaultTargets);
+        }
       } else if (workflowNode.type === 'fallback') {
         const fallbackData = workflowNode.data as FallbackNodeData;
         const action =

@@ -1,3 +1,4 @@
+import { PageHeader } from '../../components/PageHeader';
 import {
   Alert,
   Box,
@@ -37,13 +38,10 @@ const mcpDevConfigExample = `{
 export function McpSettingsPage() {
   return (
     <Stack spacing={2}>
-      <Typography variant="h4" sx={{ fontWeight: 700 }}>
-        MCP
-      </Typography>
-      <Typography color="text.secondary">
-        Connect Cursor or other MCP hosts to the ontology stack so agents can read and write entity
-        data and run SPARQL without using this dashboard.
-      </Typography>
+      <PageHeader
+        title="MCP integration"
+        subtitle="Connect Cursor or other MCP hosts so agents can read and write entity data and run SPARQL."
+      />
 
       <Alert severity="info">
         Before using MCP, start <strong>data-layer-service</strong> (port 8182) and{' '}

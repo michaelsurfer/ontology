@@ -13,10 +13,10 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import { PageHeader } from '../components/PageHeader';
 import { EntityStructureDialog } from '../components/EntityStructureDialog';
 import { ontologyApi } from '../api/client';
 import type { EntityDefinition, EntitySummary } from '../types';
@@ -71,14 +71,15 @@ export function EntitiesPage() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          Entities
-        </Typography>
-        <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
-          New entity
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Entities"
+        subtitle="Define entity schemas and manage row data in the data layer."
+        actions={
+          <Button variant="contained" onClick={() => setCreateDialogOpen(true)}>
+            New entity
+          </Button>
+        }
+      />
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 

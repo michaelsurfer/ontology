@@ -87,7 +87,8 @@ export function RelationshipsNodeSettings({
     <Stack spacing={1.5}>
       <Typography variant="body2" color="text.secondary">
         Choose an entity relationship defined under Entity relationships, then map an incoming JSON
-        field to a field on the target (object) entity to find the row to link.
+        field to a field on the target (object) entity to find the row to link. Records that cannot
+        be linked are sent to the <strong>failure</strong> output (connect to Fallback).
       </Typography>
 
       {entityRelationshipOptions.length === 0 ? (

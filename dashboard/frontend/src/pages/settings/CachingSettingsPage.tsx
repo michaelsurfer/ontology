@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import SyncIcon from '@mui/icons-material/Sync';
+import { PageHeader } from '../../components/PageHeader';
 import { ontologyApi } from '../../api/client';
 
 type CacheMetaState = {
@@ -96,13 +97,10 @@ export function CachingSettingsPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h4" sx={{ fontWeight: 700 }}>
-        Caching
-      </Typography>
-      <Typography color="text.secondary">
-        Export Turtle from the data layer and load it into rdf-cache-service for SPARQL and the RDF
-        graph view.
-      </Typography>
+      <PageHeader
+        title="Caching"
+        subtitle="Export Turtle from the data layer and load it into rdf-cache-service for SPARQL and the RDF graph view."
+      />
 
       {alertMessage ? (
         <Alert severity={alertMessage.severity} onClose={() => setAlertMessage(null)}>

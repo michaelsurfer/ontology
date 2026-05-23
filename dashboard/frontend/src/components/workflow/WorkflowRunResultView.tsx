@@ -251,6 +251,7 @@ function WorkflowRunSummaryPanel({
                 <TableCell>Name</TableCell>
                 <TableCell>Subject row</TableCell>
                 <TableCell>Object row</TableCell>
+                <TableCell>Status</TableCell>
                 <TableCell>Link id</TableCell>
               </TableRow>
             </TableHead>
@@ -259,8 +260,9 @@ function WorkflowRunSummaryPanel({
                 <TableRow key={`rel-${row.recordIndex}-${index}`}>
                   <TableCell>{row.recordIndex}</TableCell>
                   <TableCell>{row.relationshipName}</TableCell>
-                  <TableCell>{row.subjectRowId}</TableCell>
-                  <TableCell>{row.objectRowId}</TableCell>
+                  <TableCell>{row.ok ? row.subjectRowId : '—'}</TableCell>
+                  <TableCell>{row.ok ? row.objectRowId : '—'}</TableCell>
+                  <TableCell>{row.ok ? 'Linked' : row.reason || 'Failed'}</TableCell>
                   <TableCell>{row.relationshipId ?? (result.dryRun ? '— (dry run)' : '—')}</TableCell>
                 </TableRow>
               ))}

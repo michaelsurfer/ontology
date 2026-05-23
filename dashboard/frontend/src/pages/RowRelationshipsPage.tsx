@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardContent,
@@ -18,9 +17,9 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { PageHeader } from '../components/PageHeader';
 import { ontologyApi } from '../api/client';
 import type { EntitySummary, RelationshipRecord } from '../types';
 
@@ -92,17 +91,15 @@ export function RowRelationshipsPage() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Row links
-          </Typography>
-          <Typography color="text.secondary">Instance-level relationships between specific rows</Typography>
-        </Box>
-        <Button variant="contained" onClick={() => setDialogOpen(true)}>
-          New row link
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Row links"
+        subtitle="Instance-level relationships between specific entity rows."
+        actions={
+          <Button variant="contained" onClick={() => setDialogOpen(true)}>
+            New row link
+          </Button>
+        }
+      />
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 

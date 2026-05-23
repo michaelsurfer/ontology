@@ -149,7 +149,8 @@ export function RelationshipsWorkflowNode({ data }: NodeProps) {
           ? ` · ${payloadLinkField} → ${objectEntityField}`
           : ''}
       </Typography>
-      <Handle type="source" position={Position.Right} id="success" />
+      <Handle type="source" position={Position.Right} id="success" style={{ top: '35%' }} />
+      <Handle type="source" position={Position.Right} id="failure" style={{ top: '70%' }} />
     </Box>
   );
 }

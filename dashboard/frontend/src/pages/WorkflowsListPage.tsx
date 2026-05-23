@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { PageHeader } from '../components/PageHeader';
 import { ontologyApi } from '../api/client';
 import type { WorkflowSummary } from '../types/workflow';
 
@@ -50,18 +51,15 @@ export function WorkflowsListPage() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          Workflows
-        </Typography>
-        <Button variant="contained" component={RouterLink} to="/workflows/new">
-          New workflow
-        </Button>
-      </Stack>
-
-      <Typography color="text.secondary">
-        Build ingest pipelines with Trigger → Entities → Relationships → Fallback nodes on a canvas.
-      </Typography>
+      <PageHeader
+        title="Workflows"
+        subtitle="Build ingest pipelines with Trigger, Field Mapper, Validate, Entities, Relationships, and Fallback nodes."
+        actions={
+          <Button variant="contained" component={RouterLink} to="/workflows/new">
+            New workflow
+          </Button>
+        }
+      />
 
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 

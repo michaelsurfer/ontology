@@ -142,6 +142,13 @@ const defaultGraph: WorkflowGraph = {
       target: 'fallback-1',
       sourceHandle: 'failure',
     },
+    {
+      id: 'edge-relationships-fallback',
+      type: 'deletable',
+      source: 'relationships-1',
+      target: 'fallback-1',
+      sourceHandle: 'failure',
+    },
   ],
 };
 

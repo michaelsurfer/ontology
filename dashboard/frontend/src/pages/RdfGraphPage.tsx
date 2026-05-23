@@ -6,9 +6,9 @@ import {
   CardContent,
   Stack,
   TextField,
-  Typography,
 } from '@mui/material';
 import { ontologyApi } from '../api/client';
+import { PageHeader } from '../components/PageHeader';
 import { RdfGraphView } from '../components/RdfGraphView';
 import { TurtlePreviewPanel } from '../components/TurtlePreviewPanel';
 import type { GraphViewModel } from '../types';
@@ -70,12 +70,10 @@ export function RdfGraphPage() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h4" sx={{ fontWeight: 700 }}>
-        RDF graph
-      </Typography>
-      <Typography color="text.secondary">
-        Exports Turtle from data-layer-service and renders classes and properties (schema graph).
-      </Typography>
+      <PageHeader
+        title="RDF graph"
+        subtitle="Export Turtle from the data layer and explore classes and properties as an interactive schema graph."
+      />
 
       <Card variant="outlined">
         <CardContent>
