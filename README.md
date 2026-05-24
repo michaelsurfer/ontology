@@ -1,6 +1,46 @@
 # AnythingGraph
 
-AnythingGraph is a graph / context-layer platform: custom entities in SQLite, OWL-style mappings, relationships (including SQL link tables), RDF Turtle export, SHACL rules, and **Query Studio** (natural language → SPARQL → results).
+AnythingGraph helps teams turn scattered business information—documents, spreadsheets, CRM exports, API payloads—into **connected records** they can explore, automate, and question without rebuilding everything in one monolithic database.
+
+## Product overview
+
+Most organizations already have the data they need; it is just spread across tools, folders, and teams. AnythingGraph is a **context layer**: you define the record types and relationships that match how your business actually works, bring data in through uploads or webhooks, and see how accounts, people, orders, and documents link together on a visual graph.
+
+You stay in control of the model. Install a starter **template** (for example CRM or invoice extraction), adjust fields and links, then run **workflows** when new data arrives. Items that need a human review land in a **landing zone** instead of silently failing.
+
+## Who it is for
+
+- **Operations and business users** who need structured record types (forms), relationships, and light automation without a multi-month IT project
+- **Data and integration owners** who want a durable, queryable picture of entities and how they connect across sources
+- **Developers and AI assistants** that need reliable APIs and MCP access to read and write the same graph agents and people see in the UI
+
+## Problems it addresses
+
+| Challenge | How AnythingGraph helps |
+|-----------|-------------------------|
+| Data stuck in PDFs, email, and spreadsheets | Ingest and map into shared **record types** with validation |
+| “How is this customer related to that order?” is hard to answer | Model **relationships** between records and explore them visually |
+| Every new source needs a custom script | **Templates** and **workflows** package repeatable ingest pipelines |
+| Business questions wait on engineering for SQL | **Query Studio** (when RDF/SPARQL is enabled) supports natural-language exploration over the graph |
+
+## What you can do
+
+- **Define record types** — Schemas for invoices, accounts, employees, products, or anything specific to your domain.
+- **Link records** — Connect rows across types (for example contact → account → opportunity) so navigation follows real business structure.
+- **Use templates** — Install starter packs with record types, relationships, and workflows you can customize.
+- **Ingest documents and files** — Upload or send webhooks (JSON, CSV, PDF, and more); workflows create or update rows and route exceptions to review.
+- **Automate with workflows** — Trigger on upload or HTTP, validate and map fields, create relationships, and handle failures explicitly.
+- **Explore the graph** — See how types and instances connect—useful for onboarding, audits, and data-quality checks.
+- **Work with AI tools** — MCP integration lets agents list entities, rows, and relationships against the same data the dashboard uses.
+
+## Typical use cases
+
+1. **Invoice and document intake** — Pull vendor, amount, and dates from invoices into structured records; link to vendors or cost centers.
+2. **Lightweight CRM** — Accounts, contacts, leads, and opportunities with clear links and ingest from spreadsheets or external systems.
+3. **Operational hub** — A shared graph of corporations, people, products, or projects that other tools and automations reference.
+4. **Integration landing** — Normalize webhook payloads through workflows before records spread to downstream systems.
+
+**In brief (technical):** custom entities, OWL-style mappings, relationships (including link tables), RDF Turtle export, SHACL rules, and **Query Studio** (natural language → SPARQL → results).
 
 ## Architecture (high level)
 
