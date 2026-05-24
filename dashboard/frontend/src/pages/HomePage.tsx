@@ -13,6 +13,8 @@ import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import TimelineOutlinedIcon from '@mui/icons-material/TimelineOutlined';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import DashboardCustomizeOutlinedIcon from '@mui/icons-material/DashboardCustomizeOutlined';
+import ViewModuleOutlinedIcon from '@mui/icons-material/ViewModuleOutlined';
 import { PageHeader } from '../components/PageHeader';
 import { ontologyApi } from '../api/client';
 
@@ -85,7 +87,7 @@ export function HomePage() {
     <Stack spacing={3}>
       <PageHeader
         title="Overview"
-        subtitle="Manage entity schemas, row data, relationships, workflows, and RDF exports from a single control plane."
+        subtitle="Manage record types, row data, relationships, workflows, and RDF exports from a single control plane."
       />
 
       <Alert severity={healthOk ? 'success' : 'warning'}>{healthMessage}</Alert>
@@ -93,8 +95,16 @@ export function HomePage() {
       <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
         <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
           <QuickLinkCard
-            title="Entities"
-            description="Define schemas and manage instance row data."
+            title="Templates"
+            description="Install starter packs with record types and ingest workflows."
+            to="/templates"
+            icon={<ViewModuleOutlinedIcon />}
+          />
+        </Box>
+        <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
+          <QuickLinkCard
+            title="Record types"
+            description="Define what to extract and manage instance row data."
             to="/entities"
             icon={<StorageOutlinedIcon />}
           />
@@ -102,7 +112,7 @@ export function HomePage() {
         <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
           <QuickLinkCard
             title="Relationships"
-            description="Schema-level and row-level links between entities."
+            description="Schema-level and row-level links between record types."
             to="/entity-relationships"
             icon={<HubOutlinedIcon />}
           />
@@ -118,7 +128,7 @@ export function HomePage() {
         <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
           <QuickLinkCard
             title="RDF graph"
-            description="Explore entity classes and properties as an interactive schema graph."
+            description="Explore record types and properties as an interactive schema graph."
             to="/rdf-graph"
             icon={<AccountTreeOutlinedIcon />}
           />
@@ -127,12 +137,16 @@ export function HomePage() {
 
       <Card>
         <CardContent>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Recommended workflow
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+            <DashboardCustomizeOutlinedIcon color="primary" fontSize="small" />
+            <Typography variant="h6">Recommended workflow</Typography>
+          </Stack>
           <Box component="ol" sx={{ pl: 2.5, m: 0, color: 'text.secondary' }}>
-            <li>Create entity schemas and fields</li>
-            <li>Define entity-level relationships (types)</li>
+            <li>
+              <RouterLink to="/templates">Install a template</RouterLink> or create record types
+              manually
+            </li>
+            <li>Define how record types link to each other</li>
             <li>Add row data and row-level links</li>
             <li>Run ingest workflows with fallback to landing zone</li>
             <li>Sync RDF cache and validate in the graph explorer</li>

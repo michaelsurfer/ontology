@@ -51,6 +51,7 @@ type EntityStructureDialogProps = {
   initialEntity?: EntityDefinition | null;
   onClose: () => void;
   onSaved: () => void;
+  onDeleted?: () => void;
 };
 
 // Whether a field row has any AI metadata filled in.
@@ -94,6 +95,7 @@ export function EntityStructureDialog({
   initialEntity,
   onClose,
   onSaved,
+  onDeleted,
 }: EntityStructureDialogProps) {
   const [entityName, setEntityName] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -101,6 +103,7 @@ export function EntityStructureDialog({
   const [expandedMetadataIndices, setExpandedMetadataIndices] = useState<Set<number>>(new Set());
   const [errorMessage, setErrorMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -130,6 +133,7 @@ export function EntityStructureDialog({
       setExpandedMetadataIndices(new Set());
     }
     setErrorMessage('');
+    setDeleting(false);
   }, [open, mode, initialEntity]);
 
   // Persist entity structure to data-layer via dashboard API.
@@ -177,6 +181,36 @@ export function EntityStructureDialog({
       setErrorMessage(error instanceof Error ? error.message : 'Failed to save entity');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Permanently delete this entity schema and all related rows and links.
+  async function handleDeleteEntity() {
+    if (mode !== 'edit' || entityId === undefined) {
+      return;
+    }
+
+    const entityLabel = displayName.trim() || entityName.trim() || `entity ${entityId}`;
+    if (
+      !window.confirm(
+        `Delete "${entityLabel}" and all its rows and relationships? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setDeleting(true);
+    setErrorMessage('');
+    try {
+      await ontologyApi.deleteEntity(entityId);
+      onDeleted?.();
+      onClose();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete entity');
+    } finally {
+      setSaving(false);
+      setDeleting(false);
     }
   }
 
@@ -408,13 +442,22 @@ export function EntityStructureDialog({
           </Button>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
-          Cancel
-        </Button>
-        <Button variant="contained" onClick={() => void handleSaveEntityStructure()} disabled={saving}>
-          {saving ? 'Saving…' : mode === 'create' ? 'Create' : 'Save changes'}
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+        {mode === 'edit' && entityId !== undefined ? (
+          <Button color="error" onClick={() => void handleDeleteEntity()} disabled={saving}>
+            {deleting ? 'Deleting…' : 'Delete entity'}
+          </Button>
+        ) : (
+          <Box />
+        )}
+        <Stack direction="row" spacing={1}>
+          <Button onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={() => void handleSaveEntityStructure()} disabled={saving}>
+            {saving ? 'Saving…' : mode === 'create' ? 'Create' : 'Save changes'}
+          </Button>
+        </Stack>
       </DialogActions>
     </Dialog>
   );

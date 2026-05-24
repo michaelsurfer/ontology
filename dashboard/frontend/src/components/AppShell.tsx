@@ -23,6 +23,7 @@ import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import IntegrationInstructionsOutlinedIcon from '@mui/icons-material/IntegrationInstructionsOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import ViewModuleOutlinedIcon from '@mui/icons-material/ViewModuleOutlined';
 import { sidebarPalette } from '../theme/enterpriseTheme';
 
 const drawerWidth = 272;
@@ -35,6 +36,7 @@ type NavigationItem = {
 
 const navigationItems: NavigationItem[] = [
   { to: '/', label: 'Overview', icon: <HomeOutlinedIcon fontSize="small" /> },
+  { to: '/templates', label: 'Templates', icon: <ViewModuleOutlinedIcon fontSize="small" /> },
   { to: '/entities', label: 'Entities', icon: <StorageOutlinedIcon fontSize="small" /> },
   {
     to: '/entity-relationships',
@@ -68,6 +70,9 @@ function isNavigationItemSelected(pathname: string, itemPath: string): boolean {
     return true;
   }
   if (itemPath === '/landing-zone' && pathname.startsWith('/landing-zone')) {
+    return true;
+  }
+  if (itemPath === '/templates' && pathname.startsWith('/templates')) {
     return true;
   }
   if (itemPath.startsWith('/settings') && pathname.startsWith('/settings')) {

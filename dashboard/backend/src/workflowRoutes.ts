@@ -1,18 +1,14 @@
 import type { Express } from 'express';
 import {
   createWorkflowRecord,
-  createWorkflowRun,
   deleteWorkflowRecord,
-  finishWorkflowRun,
   getWorkflowById,
-  insertFallbackRecords,
-  insertLandingZoneRecords,
   listFallbackRecordsForRun,
   listWorkflowRuns,
   listWorkflows,
   updateWorkflowRecord,
 } from './workflow/database.js';
-import { executeWorkflowGraph } from './workflow/executor.js';
+import { executeWorkflowById } from './workflow/runWorkflow.js';
 import type { WorkflowGraph } from './workflow/types.js';
 
 // Register workflow CRUD and execution routes on the dashboard API.
@@ -147,65 +143,6 @@ export function registerWorkflowRoutes(application: Express): void {
   });
 }
 
-// Run a saved workflow with the given JSON input body.
-async function executeWorkflowById(
-  workflowId: number,
-  inputBody: unknown,
-  dryRun: boolean,
-) {
-  const workflow = getWorkflowById(workflowId);
-  if (!workflow) {
-    throw new Error('Workflow not found');
-  }
-
-  const graph = JSON.parse(workflow.graph_json) as WorkflowGraph;
-  const runRow = createWorkflowRun({
-    workflowId,
-    dryRun,
-    inputJson: JSON.stringify(inputBody ?? {}),
-  });
-
-  try {
-    const executionResult = await executeWorkflowGraph({
-      graph,
-      inputBody,
-      dryRun,
-    });
-
-    if (!dryRun && executionResult.fallbackRecords.length > 0) {
-      insertFallbackRecords(runRow.id, executionResult.fallbackRecords);
-
-      const fallbackAction = readFallbackActionFromGraph(graph);
-      if (fallbackAction === 'landing_zone') {
-        insertLandingZoneRecords({
-          workflowId,
-          workflowName: workflow.name,
-          runId: runRow.id,
-          records: executionResult.fallbackRecords,
-        });
-      }
-    }
-
-    finishWorkflowRun(runRow.id, 'completed', JSON.stringify(executionResult));
-    return {
-      run_id: runRow.id,
-      workflow_id: workflowId,
-      status: 'completed',
-      dry_run: dryRun,
-      result: executionResult,
-    };
-  } catch (executionError) {
-    finishWorkflowRun(
-      runRow.id,
-      'failed',
-      JSON.stringify({
-        error: formatRouteError(executionError),
-      }),
-    );
-    throw executionError;
-  }
-}
-
 // Parse workflow id path parameter.
 function parseWorkflowId(rawValue: string): number {
   const parsed = Number(rawValue);
@@ -225,19 +162,6 @@ function parseWorkflowGraph(rawGraph: unknown): WorkflowGraph {
     throw new Error('graph must include nodes[] and edges[]');
   }
   return graphObject;
-}
-
-// Read fallback node action from the workflow graph (default: landing zone).
-function readFallbackActionFromGraph(graph: WorkflowGraph): 'landing_zone' | 'stop' {
-  const fallbackNode = graph.nodes.find((node) => node.type === 'fallback');
-  if (!fallbackNode) {
-    return 'landing_zone';
-  }
-  const action = String(fallbackNode.data?.action || 'landing_zone');
-  if (action === 'stop') {
-    return 'stop';
-  }
-  return 'landing_zone';
 }
 
 // Format unknown route errors.

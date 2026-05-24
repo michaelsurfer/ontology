@@ -165,4 +165,72 @@ export const ontologyApi = {
     >('/landing-zone'),
 
   deleteLandingZoneRecord: (recordId: number) => apiClient.delete(`/landing-zone/${recordId}`),
+
+  listTemplates: () =>
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        description: string;
+        instructions?: string;
+        installed: boolean;
+        primaryWorkflowId?: number | null;
+        primaryWorkflowName?: string | null;
+        primaryEntityId?: number | null;
+        primaryEntityName?: string | null;
+        publicWebhookPath?: string | null;
+        publicDocumentUploadPath?: string | null;
+        entities?: Array<{ name: string; display_name: string; entity_id: number }>;
+      }>
+    >('/templates'),
+
+  installTemplate: (templateId: string) =>
+    apiClient.post<{
+      ok: boolean;
+      templateId: string;
+      templateName: string;
+      entities: Array<{ name: string; entityId: number; created: boolean }>;
+      entityRelationships: Array<{ ref: string; entityRelationshipId: number; created: boolean }>;
+      workflows: Array<{ name: string; workflowId: number; created: boolean }>;
+    }>(`/templates/${templateId}/install`),
+
+  uninstallTemplate: (templateId: string) =>
+    apiClient.delete<{
+      ok: boolean;
+      templateId: string;
+      templateName: string;
+      entities: Array<{ name: string; entityId: number }>;
+      entityRelationships: Array<{ ref: string; entityRelationshipId: number }>;
+      workflows: Array<{ name: string; workflowId: number }>;
+    }>(`/templates/${templateId}/install`),
+
+  processTemplateDocument: (templateId: string, file: File, dryRun = false) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (dryRun) {
+      formData.append('dry_run', 'true');
+    }
+    return apiClient.post<{
+      ok: boolean;
+      templateId: string;
+      templateName: string;
+      workflowId: number;
+      workflowName: string;
+      extraction: {
+        fileName: string;
+        extractionMethod: string;
+        records: Record<string, unknown>[];
+        summary: string;
+      };
+      workflowRun: {
+        run_id: number;
+        workflow_id: number;
+        status: string;
+        dry_run: boolean;
+        result: WorkflowExecutionResult;
+      };
+    }>(`/templates/${templateId}/process-document`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

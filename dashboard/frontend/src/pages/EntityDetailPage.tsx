@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Accordion,
   AccordionDetails,
@@ -35,6 +35,7 @@ function countFieldsWithMetadata(fields: EntityFieldDefinition[]): number {
 
 export function EntityDetailPage() {
   const { entityId: entityIdRaw } = useParams();
+  const navigate = useNavigate();
   const entityId = Number(entityIdRaw);
 
   const [entity, setEntity] = useState<EntityDefinition | null>(null);
@@ -152,6 +153,7 @@ export function EntityDetailPage() {
         initialEntity={entity}
         onClose={() => setStructureDialogOpen(false)}
         onSaved={() => void reload()}
+        onDeleted={() => navigate('/entities')}
       />
     </Stack>
   );

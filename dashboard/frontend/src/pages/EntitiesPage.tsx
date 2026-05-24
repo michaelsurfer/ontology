@@ -142,6 +142,11 @@ export function EntitiesPage() {
           setEntityBeingEdited(null);
         }}
         onSaved={() => void reloadEntities()}
+        onDeleted={() => {
+          setEditDialogOpen(false);
+          setEntityBeingEdited(null);
+          void reloadEntities();
+        }}
       />
     </Stack>
   );
