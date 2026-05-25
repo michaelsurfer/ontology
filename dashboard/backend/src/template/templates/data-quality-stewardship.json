@@ -1,0 +1,110 @@
+{
+  "id": "data-quality-stewardship",
+  "name": "Data quality stewardship",
+  "description": "Strict validation on Party records with landing zone for failed rows.",
+  "instructions": "1. Install and open Explore to see the Party record type and stewardship workflow.\n2. POST JSON with party_id, legal_name, and contact_email — validation rules enforce required fields and email format.\n3. Records that fail validation appear in the landing zone for review.\n4. Demonstrates constraint-style reasoning before data enters the graph.",
+  "entities": [
+    {
+      "name": "dq_party",
+      "display_name": "Party",
+      "fields": [
+        {
+          "field_name": "party_id",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Stable party identifier",
+          "example": "P-9001"
+        },
+        {
+          "field_name": "legal_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Legal name",
+          "example": "Contoso Holdings"
+        },
+        {
+          "field_name": "contact_email",
+          "field_type": "TEXT",
+          "description": "Primary email",
+          "example": "data@contoso.example"
+        }
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Party stewardship ingest",
+      "description": "Validate party payloads strictly before insert.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "validate-1",
+            "type": "validate",
+            "position": { "x": 300, "y": 200 },
+            "data": {
+              "label": "Quality rules",
+              "rules": [
+                { "jsonField": "party_id", "format": "required" },
+                { "jsonField": "legal_name", "format": "required" },
+                { "jsonField": "contact_email", "format": "email" }
+              ]
+            }
+          },
+          {
+            "id": "entities-1",
+            "type": "entities",
+            "position": { "x": 520, "y": 200 },
+            "data": {
+              "label": "Parties",
+              "entityRef": "dq_party",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 740, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-validate",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "validate-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-entities",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "entities-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-fallback",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-entities-fallback",
+            "type": "deletable",
+            "source": "entities-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

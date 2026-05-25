@@ -66,7 +66,7 @@ npm run dev
 - **Entities** — create, list, delete entity schemas; open entity to manage row data
 - **Entity relationships** — schema-level links between entity types (`/entity-relationships`)
 - **Row links** — instance links between rows (`/relationships`)
-- **RDF graph** — export Turtle via data-layer and visualize as an interactive graph
+- **Graph View** — export Turtle via data-layer and visualize as an interactive graph
 - **Workflows** — node canvas (Trigger → Entities → Relationships → Fallback) with SQLite-stored definitions and ingest runs
 - **Landing zone** — review records sent from workflow fallback nodes
 

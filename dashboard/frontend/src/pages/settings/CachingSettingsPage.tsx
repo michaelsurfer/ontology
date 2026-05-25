@@ -99,7 +99,7 @@ export function CachingSettingsPage() {
     <Stack spacing={2}>
       <PageHeader
         title="Caching"
-        subtitle="Export Turtle from the data layer and load it into rdf-cache-service for SPARQL and the RDF graph view."
+        subtitle="Export Turtle from the data layer and load it into rdf-cache-service for SPARQL and Graph View."
       />
 
       {alertMessage ? (

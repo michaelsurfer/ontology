@@ -2,8 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getDataLayerBaseUrl, getRdfCacheBaseUrl } from './config.js';
 import { dataLayerClient } from './dataLayerClient.js';
+import { parseJsonObject } from './parseToolJson.js';
 import { rdfCacheHealth, runSparqlQuery, syncRdfCacheFromDataLayer } from './rdfCacheClient.js';
 import { errorToolResult, jsonToolResult } from './toolResults.js';
+import { registerDataLayerWriteTools } from './writeTools.js';
 
 // Parse export scope from tool arguments (flat schema for faster TypeScript checking).
 function buildExportScope(entityIdsStar: boolean | undefined, entityIdList: string | undefined) {
@@ -25,6 +27,8 @@ function buildExportScope(entityIdsStar: boolean | undefined, entityIdList: stri
 
 // Register all AnythingGraph MCP tools on the server.
 export function registerOntologyTools(server: McpServer): void {
+  registerDataLayerWriteTools(server);
+
   server.tool('health_check', 'Check data-layer-service and rdf-cache-service connectivity.', {}, async () => {
     try {
       const [dataLayerHealth, rdfCacheHealthResult] = await Promise.all([
@@ -88,10 +92,7 @@ export function registerOntologyTools(server: McpServer): void {
     },
     async ({ entity_id: entityId, values_json: valuesJson }) => {
       try {
-        const values = JSON.parse(valuesJson) as Record<string, unknown>;
-        if (!values || typeof values !== 'object' || Array.isArray(values)) {
-          throw new Error('values_json must be a JSON object');
-        }
+        const values = parseJsonObject(valuesJson, 'values_json');
         return jsonToolResult(await dataLayerClient.createEntityRow(entityId, values));
       } catch (error) {
         return errorToolResult(error instanceof Error ? error.message : String(error));

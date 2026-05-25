@@ -7,6 +7,7 @@ import ReactFlow, {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  type Connection,
   type Edge,
   type Node,
   type NodeMouseHandler,
@@ -14,6 +15,10 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Box, Button, Chip, Stack, Typography } from '@mui/material';
 import type { GraphViewModel } from '../types';
+import {
+  CreateEntityRelationshipDialog,
+  type PendingGraphRelationshipConnection,
+} from './CreateEntityRelationshipDialog';
 import { rdfSchemaGraphNodeTypes } from './RdfSchemaGraphNodes';
 
 const nodeColors: Record<string, string> = {
@@ -24,6 +29,10 @@ const nodeColors: Record<string, string> = {
 
 interface RdfGraphViewProps {
   graph: GraphViewModel;
+  onGraphChanged?: () => void;
+  /** When true, helper text reflects a pre-filtered graph (e.g. record hub). */
+  scopedGraph?: boolean;
+  graphHeight?: number;
 }
 
 interface FlowNodeData {
@@ -64,6 +73,7 @@ function buildFlowNodes(graphNodes: GraphViewModel['nodes']): Node<FlowNodeData>
       kind: node.kind,
       entityId: node.entityId,
     },
+    connectable: node.kind === 'class' && Boolean(node.entityId),
     position: {
       x: (index % 6) * 220,
       y: Math.floor(index / 6) * 120,
@@ -134,9 +144,48 @@ function FitViewToVisibleNodes({
   return null;
 }
 
+// Return entity ids and labels when both ends of a connection are class nodes.
+function readClassConnection(
+  connection: Connection,
+  flowNodes: Node<FlowNodeData>[],
+): PendingGraphRelationshipConnection | null {
+  if (!connection.source || !connection.target || connection.source === connection.target) {
+    return null;
+  }
+
+  const sourceNode = flowNodes.find((node) => node.id === connection.source);
+  const targetNode = flowNodes.find((node) => node.id === connection.target);
+  if (!sourceNode || !targetNode) {
+    return null;
+  }
+
+  const subjectEntityId =
+    sourceNode.type === 'rdfClass' && typeof sourceNode.data.entityId === 'number'
+      ? sourceNode.data.entityId
+      : null;
+  const objectEntityId =
+    targetNode.type === 'rdfClass' && typeof targetNode.data.entityId === 'number'
+      ? targetNode.data.entityId
+      : null;
+
+  if (!subjectEntityId || !objectEntityId || subjectEntityId === objectEntityId) {
+    return null;
+  }
+
+  return {
+    subjectEntityId,
+    objectEntityId,
+    subjectLabel: String(sourceNode.data.label || 'Subject'),
+    objectLabel: String(targetNode.data.label || 'Object'),
+  };
+}
+
 // Inner chart: draggable nodes; click a node to show only its neighbors.
-function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
+function RdfGraphCanvas({ graph, onGraphChanged, scopedGraph = false, graphHeight = 520 }: RdfGraphViewProps) {
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const [pendingConnection, setPendingConnection] =
+    useState<PendingGraphRelationshipConnection | null>(null);
+  const [relationshipDialogOpen, setRelationshipDialogOpen] = useState(false);
 
   const schemaGraph = useMemo(() => filterSchemaGraph(graph), [graph]);
 
@@ -204,6 +253,32 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
     setFocusedNodeId(null);
   }, []);
 
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      const parsedConnection = readClassConnection(connection, flowNodes);
+      if (!parsedConnection) {
+        return;
+      }
+      setPendingConnection(parsedConnection);
+      setRelationshipDialogOpen(true);
+    },
+    [flowNodes],
+  );
+
+  const isValidConnection = useCallback(
+    (connection: Connection) => readClassConnection(connection, flowNodes) !== null,
+    [flowNodes],
+  );
+
+  function handleRelationshipDialogClose() {
+    setRelationshipDialogOpen(false);
+    setPendingConnection(null);
+  }
+
+  function handleRelationshipCreated() {
+    onGraphChanged?.();
+  }
+
   const focusedLabel = useMemo(() => {
     if (!focusedNodeId) {
       return '';
@@ -234,11 +309,13 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
         ) : null}
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {focusedNodeId
-          ? `Focused on "${focusedLabel}" — only directly linked nodes are shown. Click the background or "Show all nodes" to reset.`
-          : 'Click a node to show only that node and its direct connections. Use the storage icon on class nodes to open entity data. Drag nodes to rearrange.'}
+        {scopedGraph && !focusedNodeId
+          ? 'Only record types related to this hub record are shown. Click a node to focus its direct links. Drag between class nodes to add relationships.'
+          : focusedNodeId
+            ? `Focused on "${focusedLabel}" — only directly linked nodes are shown. Click the background or "Show all nodes" to reset.`
+            : 'Drag from one class node to another to create an entity relationship. Click a node to focus its neighbors. Use the storage icon on class nodes to open record data.'}
       </Typography>
-      <Box sx={{ height: 520, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+      <Box sx={{ height: graphHeight, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
         <ReactFlow
           nodes={displayNodes}
           edges={displayEdges}
@@ -246,8 +323,10 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
+          onConnect={handleConnect}
+          isValidConnection={isValidConnection}
           nodesDraggable
-          nodesConnectable={false}
+          nodesConnectable
           elementsSelectable
           nodeTypes={rdfSchemaGraphNodeTypes}
           fitView
@@ -262,15 +341,27 @@ function RdfGraphCanvas({ graph }: RdfGraphViewProps) {
           <Controls />
         </ReactFlow>
       </Box>
+
+      <CreateEntityRelationshipDialog
+        open={relationshipDialogOpen}
+        connection={pendingConnection}
+        onClose={handleRelationshipDialogClose}
+        onCreated={handleRelationshipCreated}
+      />
     </Box>
   );
 }
 
 // RDF graph visualization with draggable nodes and click-to-focus neighbors.
-export function RdfGraphView({ graph }: RdfGraphViewProps) {
+export function RdfGraphView({ graph, onGraphChanged, scopedGraph, graphHeight }: RdfGraphViewProps) {
   return (
     <ReactFlowProvider>
-      <RdfGraphCanvas graph={graph} />
+      <RdfGraphCanvas
+        graph={graph}
+        onGraphChanged={onGraphChanged}
+        scopedGraph={scopedGraph}
+        graphHeight={graphHeight}
+      />
     </ReactFlowProvider>
   );
 }

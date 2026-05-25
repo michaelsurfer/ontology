@@ -1,0 +1,193 @@
+{
+  "id": "product-composition",
+  "name": "Product composition",
+  "description": "Products, components, and suppliers with part_of and supplied_by relationships.",
+  "instructions": "1. Install and use Explore to navigate Product, Component, Supplier, and schema relationships.\n2. POST product rows, then component rows with product_sku and supplier_name for linking.\n3. The workflow creates components and links part_of (to product) and supplied_by (to supplier).\n4. Graph View shows the composition ontology after RDF sync.",
+  "entities": [
+    {
+      "name": "prod_product",
+      "display_name": "Product",
+      "fields": [
+        {
+          "field_name": "product_sku",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Product SKU",
+          "example": "SKU-1000"
+        },
+        {
+          "field_name": "product_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Product display name",
+          "example": "Wireless Hub"
+        }
+      ]
+    },
+    {
+      "name": "prod_component",
+      "display_name": "Component",
+      "fields": [
+        {
+          "field_name": "component_sku",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Component SKU",
+          "example": "CMP-42"
+        },
+        {
+          "field_name": "component_name",
+          "field_type": "TEXT",
+          "description": "Component name",
+          "example": "Power supply module"
+        },
+        {
+          "field_name": "product_sku",
+          "field_type": "TEXT",
+          "description": "Parent product SKU for part_of link",
+          "example": "SKU-1000"
+        },
+        {
+          "field_name": "supplier_name",
+          "field_type": "TEXT",
+          "description": "Supplier name for supplied_by link",
+          "example": "Acme Parts Inc"
+        }
+      ]
+    },
+    {
+      "name": "prod_supplier",
+      "display_name": "Supplier",
+      "fields": [
+        {
+          "field_name": "supplier_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Supplier legal or trade name",
+          "example": "Acme Parts Inc"
+        },
+        {
+          "field_name": "country",
+          "field_type": "TEXT",
+          "description": "Supplier country",
+          "example": "US"
+        }
+      ]
+    }
+  ],
+  "entity_relationships": [
+    {
+      "ref": "component_part_of_product",
+      "relationship_name": "part_of",
+      "subject_entity_name": "prod_component",
+      "object_entity_name": "prod_product"
+    },
+    {
+      "ref": "component_supplied_by_supplier",
+      "relationship_name": "supplied_by",
+      "subject_entity_name": "prod_component",
+      "object_entity_name": "prod_supplier"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "BOM component ingest",
+      "description": "Ingest components and link to products and suppliers.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "entities-component",
+            "type": "entities",
+            "position": { "x": 320, "y": 200 },
+            "data": {
+              "label": "Components",
+              "entityRef": "prod_component",
+              "minMatchScore": 1
+            }
+          },
+          {
+            "id": "relationships-part",
+            "type": "relationships",
+            "position": { "x": 560, "y": 140 },
+            "data": {
+              "label": "Part of product",
+              "entityRelationshipRef": "component_part_of_product",
+              "payloadLinkField": "product_sku",
+              "objectEntityField": "product_sku"
+            }
+          },
+          {
+            "id": "relationships-supplier",
+            "type": "relationships",
+            "position": { "x": 560, "y": 280 },
+            "data": {
+              "label": "Supplied by",
+              "entityRelationshipRef": "component_supplied_by_supplier",
+              "payloadLinkField": "supplier_name",
+              "objectEntityField": "supplier_name"
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 800, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-component",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "entities-component",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-component-part",
+            "type": "deletable",
+            "source": "entities-component",
+            "target": "relationships-part",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-part-supplier",
+            "type": "deletable",
+            "source": "relationships-part",
+            "target": "relationships-supplier",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-component-fallback",
+            "type": "deletable",
+            "source": "entities-component",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-part-fallback",
+            "type": "deletable",
+            "source": "relationships-part",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-supplier-fallback",
+            "type": "deletable",
+            "source": "relationships-supplier",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

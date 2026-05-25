@@ -44,7 +44,7 @@ const navigationItems: NavigationItem[] = [
     icon: <HubOutlinedIcon fontSize="small" />,
   },
   { to: '/relationships', label: 'Row links', icon: <LinkOutlinedIcon fontSize="small" /> },
-  { to: '/rdf-graph', label: 'RDF graph', icon: <AccountTreeOutlinedIcon fontSize="small" /> },
+  { to: '/rdf-graph', label: 'Graph View', icon: <AccountTreeOutlinedIcon fontSize="small" /> },
   { to: '/workflows', label: 'Workflows', icon: <TimelineOutlinedIcon fontSize="small" /> },
   { to: '/landing-zone', label: 'Landing zone', icon: <InboxOutlinedIcon fontSize="small" /> },
 ];
@@ -83,6 +83,10 @@ function isNavigationItemSelected(pathname: string, itemPath: string): boolean {
 
 // Resolve a short label for the top app bar from the current route.
 function resolveTopBarTitle(pathname: string): string {
+  if (/^\/entities\/\d+\/rows\/\d+/.test(pathname)) {
+    return 'Record hub';
+  }
+
   const mainMatch = navigationItems.find((item) => isNavigationItemSelected(pathname, item.to));
   if (mainMatch) {
     return mainMatch.label;

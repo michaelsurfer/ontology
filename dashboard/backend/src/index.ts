@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import { loadDashboardEnvironmentFiles } from './loadEnvFile.js';
 import { dataLayerClient, getDataLayerBaseUrl } from './dataLayerClient.js';
 import {
   fetchRdfCacheMeta,
@@ -14,6 +15,8 @@ import { registerTemplateRoutes } from './templateRoutes.js';
 import { registerWorkflowRoutes } from './workflowRoutes.js';
 
 const defaultPort = 5180;
+
+loadDashboardEnvironmentFiles();
 
 // Start the dashboard API that proxies data-layer-service.
 function startDashboardServer() {

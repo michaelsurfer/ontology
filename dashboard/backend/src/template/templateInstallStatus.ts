@@ -60,7 +60,7 @@ export async function listTemplateSummariesWithStatus(): Promise<
   const summaries = listTemplateSummaries();
   const statusRows: Array<TemplateSummary & { installed: boolean }> = [];
 
-  const workflows = listWorkflows();
+  const platformWorkflows = listWorkflows();
 
   const platformEntities = await dataLayerClient.listEntities();
 
@@ -71,8 +71,9 @@ export async function listTemplateSummariesWithStatus(): Promise<
     let primaryEntityId: number | null = null;
     let primaryEntityName: string | null = null;
     let entities: TemplateSummary['entities'];
+    let entityRelationships: TemplateSummary['entityRelationships'];
+    let templateWorkflows: TemplateSummary['workflows'];
     let publicWebhookPath: string | null = null;
-    let publicDocumentUploadPath: string | null = null;
     let instructions: string | undefined;
 
     try {
@@ -81,24 +82,82 @@ export async function listTemplateSummariesWithStatus(): Promise<
       installed = await isTemplateInstalled(summary.id);
       if (installed) {
         primaryWorkflowName = resolvePrimaryWorkflowName(template);
-        const workflowMatch = workflows.find((row) => row.name === primaryWorkflowName);
+        const workflowMatch = platformWorkflows.find((row) => row.name === primaryWorkflowName);
         primaryWorkflowId = workflowMatch?.id ?? null;
 
         if (primaryWorkflowId) {
           const publicPaths = buildTemplatePublicPaths(summary.id, primaryWorkflowId);
           publicWebhookPath = publicPaths.publicWebhookPath;
-          publicDocumentUploadPath = publicPaths.publicDocumentUploadPath;
           primaryEntityId = await resolvePrimaryEntityIdForTemplate(summary.id, primaryWorkflowId);
         }
 
-        entities = template.entities.map((entityDefinition) => {
-          const entityRow = platformEntities.find((row) => row.name === entityDefinition.name);
-          return {
-            name: entityDefinition.name,
-            display_name: entityDefinition.display_name || entityDefinition.name,
-            entity_id: entityRow?.id ?? 0,
-          };
-        }).filter((row) => row.entity_id > 0);
+        const entityIdByName = new Map(platformEntities.map((row) => [row.name, row.id]));
+        const displayNameByEntityName = new Map(
+          template.entities.map((entityDefinition) => [
+            entityDefinition.name,
+            entityDefinition.display_name || entityDefinition.name,
+          ]),
+        );
+
+        entities = template.entities
+          .map((entityDefinition) => {
+            const entityId = entityIdByName.get(entityDefinition.name);
+            return {
+              name: entityDefinition.name,
+              display_name: entityDefinition.display_name || entityDefinition.name,
+              entity_id: entityId ?? 0,
+            };
+          })
+          .filter((row) => row.entity_id > 0);
+
+        const platformEntityRelationships = await dataLayerClient.listEntityRelationships();
+        entityRelationships = (template.entity_relationships || [])
+          .map((relationshipDefinition) => {
+            const subjectEntityId = entityIdByName.get(relationshipDefinition.subject_entity_name);
+            const objectEntityId = entityIdByName.get(relationshipDefinition.object_entity_name);
+            if (!subjectEntityId || !objectEntityId) {
+              return null;
+            }
+
+            const relationshipRow = platformEntityRelationships.find(
+              (row) =>
+                row.relationship_name === relationshipDefinition.relationship_name &&
+                row.subject_entity_id === subjectEntityId &&
+                row.object_entity_id === objectEntityId,
+            );
+            if (!relationshipRow) {
+              return null;
+            }
+
+            return {
+              ref: relationshipDefinition.ref,
+              relationship_name: relationshipDefinition.relationship_name,
+              subject_entity_name: relationshipDefinition.subject_entity_name,
+              object_entity_name: relationshipDefinition.object_entity_name,
+              subject_display_name:
+                displayNameByEntityName.get(relationshipDefinition.subject_entity_name) ||
+                relationshipDefinition.subject_entity_name,
+              object_display_name:
+                displayNameByEntityName.get(relationshipDefinition.object_entity_name) ||
+                relationshipDefinition.object_entity_name,
+              entity_relationship_id: relationshipRow.id,
+            };
+          })
+          .filter((row): row is NonNullable<typeof row> => row !== null);
+
+        templateWorkflows = template.workflows
+          .map((workflowDefinition) => {
+            const workflowRow = platformWorkflows.find((row) => row.name === workflowDefinition.name);
+            if (!workflowRow) {
+              return null;
+            }
+            return {
+              name: workflowDefinition.name,
+              description: workflowDefinition.description,
+              workflow_id: workflowRow.id,
+            };
+          })
+          .filter((row): row is NonNullable<typeof row> => row !== null);
 
         if (primaryEntityId) {
           const primaryEntity = entities.find((row) => row.entity_id === primaryEntityId);
@@ -118,8 +177,9 @@ export async function listTemplateSummariesWithStatus(): Promise<
       primaryEntityId,
       primaryEntityName,
       entities,
+      entityRelationships,
+      workflows: templateWorkflows,
       publicWebhookPath,
-      publicDocumentUploadPath,
     });
   }
 

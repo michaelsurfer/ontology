@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell';
 import { HomePage } from './pages/HomePage';
 import { EntitiesPage } from './pages/EntitiesPage';
 import { EntityDetailPage } from './pages/EntityDetailPage';
+import { RecordHubPage } from './pages/RecordHubPage';
 import { EntityRelationshipsPage } from './pages/EntityRelationshipsPage';
 import { RowRelationshipsPage } from './pages/RowRelationshipsPage';
 import { RdfGraphPage } from './pages/RdfGraphPage';
@@ -10,6 +11,7 @@ import { WorkflowsListPage } from './pages/WorkflowsListPage';
 import { WorkflowEditorPage } from './pages/WorkflowEditorPage';
 import { LandingZonePage } from './pages/LandingZonePage';
 import { TemplatesPage } from './pages/TemplatesPage';
+import { TemplateDetailPage } from './pages/TemplateDetailPage';
 import { CachingSettingsPage } from './pages/settings/CachingSettingsPage';
 import { McpSettingsPage } from './pages/settings/McpSettingsPage';
 
@@ -19,8 +21,10 @@ export function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/templates/:templateId" element={<TemplateDetailPage />} />
         <Route path="/entities" element={<EntitiesPage />} />
         <Route path="/entities/:entityId" element={<EntityDetailPage />} />
+        <Route path="/entities/:entityId/rows/:rowId" element={<RecordHubPage />} />
         <Route path="/entity-relationships" element={<EntityRelationshipsPage />} />
         <Route path="/relationships" element={<RowRelationshipsPage />} />
         <Route path="/rdf-graph" element={<RdfGraphPage />} />

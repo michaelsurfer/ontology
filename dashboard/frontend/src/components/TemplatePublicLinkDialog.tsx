@@ -18,24 +18,19 @@ type TemplatePublicLinkDialogProps = {
   open: boolean;
   templateName: string;
   webhookPath: string | null;
-  documentUploadPath: string | null;
   onClose: () => void;
 };
 
-// Show public API URLs for webhook ingest and document upload.
+// Show the public workflow webhook URL for JSON ingest.
 export function TemplatePublicLinkDialog({
   open,
   templateName,
   webhookPath,
-  documentUploadPath,
   onClose,
 }: TemplatePublicLinkDialogProps) {
   const [copyMessage, setCopyMessage] = useState('');
 
   const webhookUrl = webhookPath ? `${window.location.origin}${webhookPath}` : '';
-  const documentUploadUrl = documentUploadPath
-    ? `${window.location.origin}${documentUploadPath}`
-    : '';
 
   async function copyToClipboard(value: string, label: string) {
     try {
@@ -48,12 +43,13 @@ export function TemplatePublicLinkDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Public link — {templateName}</DialogTitle>
+      <DialogTitle>Public webhook — {templateName}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Typography variant="body2" color="text.secondary">
-            Share these URLs with external systems. Webhook accepts JSON (POST). Document upload
-            accepts multipart file (POST, field name <strong>file</strong>).
+            POST structured JSON to this URL. Send an array of record objects or{' '}
+            <code>{'{ "records": [ ... ] }'}</code>. The template ingest workflow validates,
+            maps fields, creates rows, and links relationships.
           </Typography>
 
           {copyMessage ? <Alert severity="success">{copyMessage}</Alert> : null}
@@ -77,28 +73,9 @@ export function TemplatePublicLinkDialog({
                 ),
               }}
             />
-          ) : null}
-
-          {documentUploadUrl ? (
-            <TextField
-              label="Document upload (file ingest)"
-              value={documentUploadUrl}
-              fullWidth
-              InputProps={{
-                readOnly: true,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="Copy document upload URL"
-                      onClick={() => void copyToClipboard(documentUploadUrl, 'document URL')}
-                    >
-                      <ContentCopyIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          ) : null}
+          ) : (
+            <Alert severity="warning">Webhook URL is not available until the template is installed.</Alert>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import type {
   EntityDefinition,
   EntityFieldInput,
@@ -20,6 +20,30 @@ export const apiClient = axios.create({
   baseURL: '/api',
   headers: { Accept: 'application/json' },
 });
+
+// Read a human-friendly error message from an API client failure.
+export function readApiErrorMessage(error: unknown): string {
+  if (isAxiosError(error)) {
+    const responseData = error.response?.data;
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      'error' in responseData &&
+      typeof (responseData as { error: unknown }).error === 'string'
+    ) {
+      return (responseData as { error: string }).error;
+    }
+    if (typeof responseData === 'string' && responseData.trim()) {
+      return responseData.trim().slice(0, 500);
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
 
 export const ontologyApi = {
   health: () => apiClient.get('/health'),
@@ -179,10 +203,54 @@ export const ontologyApi = {
         primaryEntityId?: number | null;
         primaryEntityName?: string | null;
         publicWebhookPath?: string | null;
-        publicDocumentUploadPath?: string | null;
         entities?: Array<{ name: string; display_name: string; entity_id: number }>;
+        entityRelationships?: Array<{
+          ref: string;
+          relationship_name: string;
+          subject_entity_name: string;
+          object_entity_name: string;
+          subject_display_name: string;
+          object_display_name: string;
+          entity_relationship_id: number;
+        }>;
+        workflows?: Array<{
+          name: string;
+          description?: string;
+          workflow_id: number;
+        }>;
       }>
     >('/templates'),
+
+  getTemplate: (templateId: string) =>
+    apiClient.get<{
+      id: string;
+      name: string;
+      description: string;
+      instructions?: string;
+      installed: boolean;
+      entities: Array<{
+        name: string;
+        display_name?: string;
+        fields: Array<{
+          field_name: string;
+          field_type: string;
+          is_required?: boolean;
+          description?: string;
+          example?: string;
+        }>;
+      }>;
+      entityRelationships: Array<{
+        ref: string;
+        relationship_name: string;
+        subject_entity_name: string;
+        object_entity_name: string;
+      }>;
+      workflows: Array<{
+        name: string;
+        description?: string;
+        pipelineSteps: string[];
+      }>;
+    }>(`/templates/${templateId}`),
 
   installTemplate: (templateId: string) =>
     apiClient.post<{
@@ -204,33 +272,4 @@ export const ontologyApi = {
       workflows: Array<{ name: string; workflowId: number }>;
     }>(`/templates/${templateId}/install`),
 
-  processTemplateDocument: (templateId: string, file: File, dryRun = false) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (dryRun) {
-      formData.append('dry_run', 'true');
-    }
-    return apiClient.post<{
-      ok: boolean;
-      templateId: string;
-      templateName: string;
-      workflowId: number;
-      workflowName: string;
-      extraction: {
-        fileName: string;
-        extractionMethod: string;
-        records: Record<string, unknown>[];
-        summary: string;
-      };
-      workflowRun: {
-        run_id: number;
-        workflow_id: number;
-        status: string;
-        dry_run: boolean;
-        result: WorkflowExecutionResult;
-      };
-    }>(`/templates/${templateId}/process-document`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
 };

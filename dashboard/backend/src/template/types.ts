@@ -48,6 +48,22 @@ export type TemplateInstalledEntityLink = {
   entity_id: number;
 };
 
+export type TemplateInstalledEntityRelationshipLink = {
+  ref: string;
+  relationship_name: string;
+  subject_entity_name: string;
+  object_entity_name: string;
+  subject_display_name: string;
+  object_display_name: string;
+  entity_relationship_id: number;
+};
+
+export type TemplateInstalledWorkflowLink = {
+  name: string;
+  description?: string;
+  workflow_id: number;
+};
+
 export type TemplateSummary = {
   id: string;
   name: string;
@@ -55,14 +71,15 @@ export type TemplateSummary = {
   instructions?: string;
   /** All template entities, relationships, and workflows exist in the platform. */
   installed?: boolean;
-  /** Set when installed — workflow used for document upload / ingest. */
+  /** Set when installed — primary ingest workflow for webhook links. */
   primaryWorkflowId?: number | null;
   primaryWorkflowName?: string | null;
   primaryEntityId?: number | null;
   primaryEntityName?: string | null;
   entities?: TemplateInstalledEntityLink[];
+  entityRelationships?: TemplateInstalledEntityRelationshipLink[];
+  workflows?: TemplateInstalledWorkflowLink[];
   publicWebhookPath?: string | null;
-  publicDocumentUploadPath?: string | null;
 };
 
 export type TemplateInstallEntityResult = {

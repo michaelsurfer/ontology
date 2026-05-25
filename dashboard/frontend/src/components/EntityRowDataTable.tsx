@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   IconButton,
@@ -17,6 +18,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import type { EntityDefinition, EntityFieldDefinition, EntityRowRecord } from '../types';
 import {
   buildEmptyFormValues,
@@ -76,6 +78,7 @@ export function EntityRowDataTable({
   onUpdateRow,
   onDeleteRow,
 }: EntityRowDataTableProps) {
+  const navigate = useNavigate();
   const activeFields = useMemo(
     () => entity.fields.filter((field) => field.is_active !== false),
     [entity.fields],
@@ -230,6 +233,15 @@ export function EntityRowDataTable({
                     </>
                   ) : (
                     <>
+                      <Tooltip title="Record hub (360° view)">
+                        <IconButton
+                          size="small"
+                          disabled={saving || editingRowId !== null}
+                          onClick={() => navigate(`/entities/${entity.id}/rows/${row.id}`)}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="Edit row">
                         <IconButton
                           size="small"

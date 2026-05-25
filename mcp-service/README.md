@@ -38,15 +38,54 @@ Copy `.env.example` if you run with custom URLs (MCP hosts pass `env` in config)
 
 ## Tools
 
+### Health and schema (read)
+
 | Tool | Description |
 |------|-------------|
 | `health_check` | Ping data-layer + rdf-cache |
 | `list_entities` | Entity id/name list |
 | `get_entity` | Full entity schema + fields |
-| `list_entity_rows` | Rows for one entity |
-| `create_entity_row` | Insert row (`values_json` string) |
 | `list_entity_relationships` | Schema-level entity links |
-| `list_row_relationships` | Row-to-row instance links |
+| `get_entity_relationship` | One schema relationship by id |
+
+### Schema (write)
+
+| Tool | Description |
+|------|-------------|
+| `create_entity` | Create record type + fields (`fields_json` array) |
+| `update_entity` | Update name, display name, and/or fields |
+| `delete_entity` | Delete record type and related data |
+
+### Rows (read / write)
+
+| Tool | Description |
+|------|-------------|
+| `list_entity_rows` | Rows for one entity |
+| `create_entity_row` | Insert row (`values_json` object) |
+| `update_entity_row` | Update row values |
+| `delete_entity_row` | Delete one row |
+
+### Row links (read / write)
+
+| Tool | Description |
+|------|-------------|
+| `list_row_relationships` | All instance links between rows |
+| `create_row_relationship` | Link two rows (schema relationship must exist) |
+| `update_row_relationship` | Update a row link |
+| `delete_row_relationship` | Delete a row link |
+
+### Schema relationships (write)
+
+| Tool | Description |
+|------|-------------|
+| `create_entity_relationship` | Define link between two entity types |
+| `update_entity_relationship` | Update schema relationship |
+| `delete_entity_relationship` | Delete schema relationship |
+
+### RDF / SPARQL
+
+| Tool | Description |
+|------|-------------|
 | `export_turtle` | RDF Turtle from data-layer (no cache load) |
 | `sync_rdf_cache` | Export Turtle → `POST /cache/load` |
 | `run_sparql` | SPARQL SELECT (syncs cache first by default) |
@@ -91,12 +130,15 @@ For development without a build step:
 }
 ```
 
-Replace `/absolute/path/to/ontology` with your repo path (folder name may still be `ontology` on disk).
+Replace `/absolute/path/to/ontology` with your repo path.
 
 ## Typical agent workflow
 
 1. `health_check`
 2. `list_entities` or read resource `anythinggraph://schema-summary`
-3. Mutate data via `create_entity_row` (etc.) if needed
-4. `sync_rdf_cache` or `run_sparql` (which syncs by default)
-5. `run_sparql` with `sync_cache_before: false` for follow-up queries on unchanged data
+3. `create_entity` / `create_entity_relationship` when defining new types or links
+4. `create_entity_row` and `create_row_relationship` for instance data
+5. `sync_rdf_cache` or `run_sparql` (which syncs by default)
+6. `run_sparql` with `sync_cache_before: false` for follow-up queries on unchanged data
+
+**Order for row links:** create the schema relationship with `create_entity_relationship` before `create_row_relationship`.

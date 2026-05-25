@@ -127,7 +127,7 @@ export function HomePage() {
         </Box>
         <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
           <QuickLinkCard
-            title="RDF graph"
+            title="Graph View"
             description="Explore record types and properties as an interactive schema graph."
             to="/rdf-graph"
             icon={<AccountTreeOutlinedIcon />}

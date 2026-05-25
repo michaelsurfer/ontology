@@ -3,8 +3,8 @@
 /**
  * Seed ~500 random CRM records (accounts, contacts, leads, opportunities,
  * invoices, purchase orders, support tickets) using the AnythingGraph MCP server
- * for row inserts (create_entity_row) and the data-layer HTTP API for
- * entity schemas and relationships (not exposed as MCP tools yet).
+ * for row inserts (create_entity_row). Entity schemas and relationships can use
+ * MCP write tools (create_entity, create_entity_relationship) or the HTTP API below.
  *
  * Usage:
  *   node scripts/seed-crm-via-mcp.mjs

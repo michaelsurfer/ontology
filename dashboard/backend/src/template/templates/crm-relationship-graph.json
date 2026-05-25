@@ -1,8 +1,8 @@
 {
-  "id": "crm-basic",
-  "name": "CRM basics",
-  "description": "Accounts, contacts, and an ingest workflow that links contacts to accounts by name.",
-  "instructions": "1. Create account rows first (or include account_name on each contact payload).\n2. Open this template to upload contact data, or POST JSON to the public webhook.\n3. Each contact row should include full_name, email, and account_name for linking.\n4. View the Contact record type and CRM contact ingest workflow for field names and mapping.",
+  "id": "crm-relationship-graph",
+  "name": "CRM relationship graph",
+  "description": "Accounts and contacts with belongs_to_account schema links and ingest workflow.",
+  "instructions": "1. Install and use Explore to open Account, Contact, schema relationships, and the ingest workflow.\n2. POST JSON to the webhook with contact rows (full_name, email, account_name).\n3. Create account rows first or include account_name on each contact for automatic linking.\n4. Inspect row links on the Relationships page and the schema on Graph View after syncing RDF cache.",
   "entities": [
     {
       "name": "crm_account",
@@ -14,8 +14,7 @@
           "is_required": true,
           "is_identifier": true,
           "description": "Company or account name",
-          "example": "Northwind Traders",
-          "extraction_hint": "Account name in CRM exports or contract header"
+          "example": "Northwind Traders"
         },
         {
           "field_name": "industry",
@@ -41,15 +40,13 @@
           "field_name": "email",
           "field_type": "TEXT",
           "description": "Work email",
-          "example": "jane@northwind.example",
-          "extraction_hint": "Email address in contact block"
+          "example": "jane@northwind.example"
         },
         {
           "field_name": "account_name",
           "field_type": "TEXT",
           "description": "Account name used to link this contact",
-          "example": "Northwind Traders",
-          "extraction_hint": "Company name associated with the contact"
+          "example": "Northwind Traders"
         }
       ]
     }
@@ -72,12 +69,12 @@
             "id": "trigger-1",
             "type": "trigger",
             "position": { "x": 80, "y": 200 },
-            "data": { "label": "Trigger", "triggerType": "manual" }
+            "data": { "label": "Trigger", "triggerType": "webhook" }
           },
           {
             "id": "entities-contact",
             "type": "entities",
-            "position": { "x": 320, "y": 200 },
+            "position": { "x": 360, "y": 200 },
             "data": {
               "label": "Contacts",
               "entityRef": "crm_contact",
@@ -87,7 +84,7 @@
           {
             "id": "relationships-1",
             "type": "relationships",
-            "position": { "x": 560, "y": 200 },
+            "position": { "x": 640, "y": 200 },
             "data": {
               "label": "Link to account",
               "entityRelationshipRef": "contact_belongs_to_account",
@@ -98,7 +95,7 @@
           {
             "id": "fallback-1",
             "type": "fallback",
-            "position": { "x": 800, "y": 200 },
+            "position": { "x": 920, "y": 200 },
             "data": { "label": "Fallback", "action": "landing_zone" }
           }
         ],
@@ -111,7 +108,7 @@
             "sourceHandle": "success"
           },
           {
-            "id": "edge-contact-relationships",
+            "id": "edge-contact-rel",
             "type": "deletable",
             "source": "entities-contact",
             "target": "relationships-1",
@@ -125,7 +122,7 @@
             "sourceHandle": "failure"
           },
           {
-            "id": "edge-relationships-fallback",
+            "id": "edge-rel-fallback",
             "type": "deletable",
             "source": "relationships-1",
             "target": "fallback-1",
