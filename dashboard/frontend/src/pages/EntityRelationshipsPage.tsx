@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -21,11 +22,18 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
 import { PageHeader } from '../components/PageHeader';
+import { PlaybookReturnNav } from '../components/PlaybookReturnNav';
 import { EntityRelationshipLinksDialog } from '../components/EntityRelationshipLinksDialog';
 import { ontologyApi } from '../api/client';
 import type { EntityRelationshipDefinition, EntitySummary } from '../types';
 
 export function EntityRelationshipsPage() {
+  const [searchParams] = useSearchParams();
+  const highlightedRelationshipId = useMemo(() => {
+    const parsed = Number(searchParams.get('highlight'));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [searchParams]);
+
   const [entities, setEntities] = useState<EntitySummary[]>([]);
   const [relationships, setRelationships] = useState<EntityRelationshipDefinition[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
@@ -103,6 +111,7 @@ export function EntityRelationshipsPage() {
 
   return (
     <Stack spacing={2}>
+      <PlaybookReturnNav currentSectionLabel="Schema relationships" />
       <PageHeader
         title="Entity relationships"
         subtitle="Schema-level links between entity types. Use View links to see how rows connect (e.g. Employee A works at Company B)."
@@ -129,7 +138,16 @@ export function EntityRelationshipsPage() {
             </TableHead>
             <TableBody>
               {relationships.map((relationship) => (
-                <TableRow key={relationship.id} hover>
+                <TableRow
+                  key={relationship.id}
+                  hover
+                  selected={highlightedRelationshipId === relationship.id}
+                  sx={
+                    highlightedRelationshipId === relationship.id
+                      ? { bgcolor: 'action.selected' }
+                      : undefined
+                  }
+                >
                   <TableCell>{relationship.id}</TableCell>
                   <TableCell>{relationship.relationship_name}</TableCell>
                   <TableCell>{entityLabel(relationship.subject_entity_id)}</TableCell>

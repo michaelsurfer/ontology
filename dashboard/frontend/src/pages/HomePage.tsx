@@ -13,10 +13,26 @@ import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import TimelineOutlinedIcon from '@mui/icons-material/TimelineOutlined';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
-import DashboardCustomizeOutlinedIcon from '@mui/icons-material/DashboardCustomizeOutlined';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import ViewModuleOutlinedIcon from '@mui/icons-material/ViewModuleOutlined';
 import { PageHeader } from '../components/PageHeader';
-import { ontologyApi } from '../api/client';
+import { ontologyApi, readApiErrorMessage } from '../api/client';
+
+// Fixed width for overview quick-link cards so rows stay even in the flex wrap grid.
+const OVERVIEW_CARD_WIDTH_PX = 340;
+
+const overviewCardGridSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 2,
+} as const;
+
+const overviewCardCellSx = {
+  width: OVERVIEW_CARD_WIDTH_PX,
+  minWidth: OVERVIEW_CARD_WIDTH_PX,
+  maxWidth: OVERVIEW_CARD_WIDTH_PX,
+  flexShrink: 0,
+} as const;
 
 type QuickLinkCardProps = {
   title: string;
@@ -28,7 +44,7 @@ type QuickLinkCardProps = {
 // Overview card linking to a primary workspace area.
 function QuickLinkCard({ title, description, to, icon }: QuickLinkCardProps) {
   return (
-    <Card sx={{ height: '100%' }}>
+    <Card sx={{ height: '100%', width: '100%' }}>
       <CardContent>
         <Box
           sx={{
@@ -62,26 +78,39 @@ function QuickLinkCard({ title, description, to, icon }: QuickLinkCardProps) {
 export function HomePage() {
   const [healthMessage, setHealthMessage] = useState('Checking services…');
   const [healthOk, setHealthOk] = useState(false);
+  const [landingZoneRecordCount, setLandingZoneRecordCount] = useState<number | null>(null);
+  const [overviewLoadError, setOverviewLoadError] = useState('');
 
   useEffect(() => {
-    void loadHealth();
+    void loadOverview();
   }, []);
 
-  async function loadHealth() {
+  // Load platform health and landing zone queue size for the overview dashboard.
+  async function loadOverview() {
+    setOverviewLoadError('');
     try {
-      const response = await ontologyApi.health();
-      const dataLayerUrl = response.data.dataLayerUrl || 'data-layer-service';
-      setHealthOk(Boolean(response.data.ok));
+      const [healthResponse, landingZoneResponse] = await Promise.all([
+        ontologyApi.health(),
+        ontologyApi.listLandingZoneRecords(),
+      ]);
+      const dataLayerUrl = healthResponse.data.dataLayerUrl || 'data-layer-service';
+      setHealthOk(Boolean(healthResponse.data.ok));
       setHealthMessage(`Platform API is healthy. Connected to ${dataLayerUrl}.`);
+      setLandingZoneRecordCount(landingZoneResponse.data.length);
     } catch (error) {
       setHealthOk(false);
-      setHealthMessage(
-        error instanceof Error
-          ? error.message
-          : 'Dashboard API or data-layer-service is not reachable.',
-      );
+      setHealthMessage(readApiErrorMessage(error));
+      setLandingZoneRecordCount(null);
+      setOverviewLoadError(readApiErrorMessage(error));
     }
   }
+
+  const landingZoneDescription =
+    landingZoneRecordCount === null
+      ? 'Review records quarantined by workflow fallback nodes.'
+      : landingZoneRecordCount === 0
+        ? 'No records waiting for review.'
+        : `${landingZoneRecordCount} new record${landingZoneRecordCount === 1 ? '' : 's'} waiting for review.`;
 
   return (
     <Stack spacing={3}>
@@ -92,16 +121,35 @@ export function HomePage() {
 
       <Alert severity={healthOk ? 'success' : 'warning'}>{healthMessage}</Alert>
 
-      <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
-        <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
+      {overviewLoadError && landingZoneRecordCount === null ? (
+        <Alert severity="info">Landing zone count unavailable until the API is healthy.</Alert>
+      ) : null}
+
+      {landingZoneRecordCount !== null && landingZoneRecordCount > 0 ? (
+        <Alert
+          severity="warning"
+          action={
+            <Button component={RouterLink} to="/landing-zone" color="inherit" size="small">
+              Review
+            </Button>
+          }
+        >
+          <strong>{landingZoneRecordCount}</strong> new record
+          {landingZoneRecordCount === 1 ? '' : 's'} in the landing zone — failed ingest or validation,
+          awaiting review.
+        </Alert>
+      ) : null}
+
+      <Box sx={overviewCardGridSx}>
+        <Box sx={overviewCardCellSx}>
           <QuickLinkCard
-            title="Templates"
+            title="Playbooks"
             description="Install starter packs with record types and ingest workflows."
-            to="/templates"
+            to="/playbooks"
             icon={<ViewModuleOutlinedIcon />}
           />
         </Box>
-        <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
+        <Box sx={overviewCardCellSx}>
           <QuickLinkCard
             title="Record types"
             description="Define what to extract and manage instance row data."
@@ -109,7 +157,7 @@ export function HomePage() {
             icon={<StorageOutlinedIcon />}
           />
         </Box>
-        <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
+        <Box sx={overviewCardCellSx}>
           <QuickLinkCard
             title="Relationships"
             description="Schema-level and row-level links between record types."
@@ -117,7 +165,7 @@ export function HomePage() {
             icon={<HubOutlinedIcon />}
           />
         </Box>
-        <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
+        <Box sx={overviewCardCellSx}>
           <QuickLinkCard
             title="Workflows"
             description="Ingest, validate, map, and quarantine records."
@@ -125,7 +173,7 @@ export function HomePage() {
             icon={<TimelineOutlinedIcon />}
           />
         </Box>
-        <Box sx={{ flex: '1 1 220px', minWidth: 220, maxWidth: 320 }}>
+        <Box sx={overviewCardCellSx}>
           <QuickLinkCard
             title="Graph View"
             description="Explore record types and properties as an interactive schema graph."
@@ -133,26 +181,15 @@ export function HomePage() {
             icon={<AccountTreeOutlinedIcon />}
           />
         </Box>
-      </Stack>
-
-      <Card>
-        <CardContent>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-            <DashboardCustomizeOutlinedIcon color="primary" fontSize="small" />
-            <Typography variant="h6">Recommended workflow</Typography>
-          </Stack>
-          <Box component="ol" sx={{ pl: 2.5, m: 0, color: 'text.secondary' }}>
-            <li>
-              <RouterLink to="/templates">Install a template</RouterLink> or create record types
-              manually
-            </li>
-            <li>Define how record types link to each other</li>
-            <li>Add row data and row-level links</li>
-            <li>Run ingest workflows with fallback to landing zone</li>
-            <li>Sync RDF cache and validate in the graph explorer</li>
-          </Box>
-        </CardContent>
-      </Card>
+        <Box sx={overviewCardCellSx}>
+          <QuickLinkCard
+            title="Landing zone"
+            description={landingZoneDescription}
+            to="/landing-zone"
+            icon={<InboxOutlinedIcon />}
+          />
+        </Box>
+      </Box>
     </Stack>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
   Accordion,
   AccordionDetails,
@@ -15,6 +15,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { EntityFieldsMetadataTable } from '../components/EntityFieldsMetadataTable';
 import { PageHeader } from '../components/PageHeader';
+import { PlaybookReturnNav } from '../components/PlaybookReturnNav';
+import { readPlaybookNavigationState } from '../utils/playbookNavigation';
 import { EntityRowDataTable } from '../components/EntityRowDataTable';
 import { EntityStructureDialog } from '../components/EntityStructureDialog';
 import { ontologyApi } from '../api/client';
@@ -35,8 +37,10 @@ function countFieldsWithMetadata(fields: EntityFieldDefinition[]): number {
 
 export function EntityDetailPage() {
   const { entityId: entityIdRaw } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const entityId = Number(entityIdRaw);
+  const playbookNavigation = readPlaybookNavigationState(location);
 
   const [entity, setEntity] = useState<EntityDefinition | null>(null);
   const [rows, setRows] = useState<EntityRowRecord[]>([]);
@@ -97,6 +101,7 @@ export function EntityDetailPage() {
 
   return (
     <Stack spacing={2}>
+      <PlaybookReturnNav currentSectionLabel={`Record type · ${entity.display_name}`} />
       <PageHeader
         title={entity.display_name}
         subtitle={`Entity ${entity.name} (id ${entity.id})`}
@@ -153,7 +158,9 @@ export function EntityDetailPage() {
         initialEntity={entity}
         onClose={() => setStructureDialogOpen(false)}
         onSaved={() => void reload()}
-        onDeleted={() => navigate('/entities')}
+        onDeleted={() =>
+          navigate(playbookNavigation?.playbookReturnPath || '/entities')
+        }
       />
     </Stack>
   );

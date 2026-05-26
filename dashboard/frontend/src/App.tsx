@@ -10,8 +10,9 @@ import { RdfGraphPage } from './pages/RdfGraphPage';
 import { WorkflowsListPage } from './pages/WorkflowsListPage';
 import { WorkflowEditorPage } from './pages/WorkflowEditorPage';
 import { LandingZonePage } from './pages/LandingZonePage';
-import { TemplatesPage } from './pages/TemplatesPage';
-import { TemplateDetailPage } from './pages/TemplateDetailPage';
+import { PlaybooksPage } from './pages/PlaybooksPage';
+import { PlaybookDetailPage } from './pages/PlaybookDetailPage';
+import { PlaybookInstalledViewPage } from './pages/PlaybookInstalledViewPage';
 import { CachingSettingsPage } from './pages/settings/CachingSettingsPage';
 import { McpSettingsPage } from './pages/settings/McpSettingsPage';
 
@@ -20,8 +21,9 @@ export function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/templates" element={<TemplatesPage />} />
-        <Route path="/templates/:templateId" element={<TemplateDetailPage />} />
+        <Route path="/playbooks" element={<PlaybooksPage />} />
+        <Route path="/playbooks/:playbookId/view" element={<PlaybookInstalledViewPage />} />
+        <Route path="/playbooks/:playbookId" element={<PlaybookDetailPage />} />
         <Route path="/entities" element={<EntitiesPage />} />
         <Route path="/entities/:entityId" element={<EntityDetailPage />} />
         <Route path="/entities/:entityId/rows/:rowId" element={<RecordHubPage />} />

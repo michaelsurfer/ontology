@@ -6,8 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "template:install": "tsx src/template/installTemplateCli.ts",
-    "template:list": "tsx src/template/installTemplateCli.ts --list"
+    "playbook:install": "tsx src/playbook/installPlaybookCli.ts",
+    "playbook:list": "tsx src/playbook/installPlaybookCli.ts --list"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

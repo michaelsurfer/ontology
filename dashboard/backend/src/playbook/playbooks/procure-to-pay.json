@@ -1,0 +1,277 @@
+{
+  "id": "procure-to-pay",
+  "name": "Procure to pay",
+  "description": "Vendors, purchase orders, invoices, and cost centers with finance graph links for AI and ops teams.",
+  "instructions": "1. Install and open the playbook view for Vendor, Purchase order, Invoice, and Cost center.\n2. POST invoice rows to the ingest webhook: invoice_number, vendor_name, total_amount, po_number, cost_center_code.\n3. Create vendors, POs, and cost centers first (or include matching keys on each invoice row).\n4. Pair with Graph View / SPARQL to trace invoice → PO → vendor → cost center.\n\nExample payload:\n{ \"records\": [{ \"invoice_number\": \"INV-9001\", \"vendor_name\": \"Acme Supplies Ltd\", \"total_amount\": 4200.5, \"invoice_date\": \"2024-06-01\", \"po_number\": \"PO-2201\", \"cost_center_code\": \"CC-ENG\" }] }\n\n**MCP (playbook id: `procure-to-pay`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row / create_row_relationship. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "p2p_vendor",
+      "display_name": "Vendor",
+      "fields": [
+        {
+          "field_name": "vendor_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Vendor name",
+          "example": "Acme Supplies Ltd"
+        },
+        {
+          "field_name": "payment_terms",
+          "field_type": "TEXT",
+          "description": "Payment terms",
+          "example": "Net 30"
+        }
+      ]
+    },
+    {
+      "name": "p2p_cost_center",
+      "display_name": "Cost center",
+      "fields": [
+        {
+          "field_name": "cost_center_code",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Cost center code",
+          "example": "CC-ENG"
+        },
+        {
+          "field_name": "cost_center_name",
+          "field_type": "TEXT",
+          "description": "Display name",
+          "example": "Engineering"
+        }
+      ]
+    },
+    {
+      "name": "p2p_purchase_order",
+      "display_name": "Purchase order",
+      "fields": [
+        {
+          "field_name": "po_number",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "PO number",
+          "example": "PO-2201"
+        },
+        {
+          "field_name": "vendor_name",
+          "field_type": "TEXT",
+          "description": "Vendor for linking",
+          "example": "Acme Supplies Ltd"
+        },
+        {
+          "field_name": "cost_center_code",
+          "field_type": "TEXT",
+          "description": "Cost center for linking",
+          "example": "CC-ENG"
+        },
+        {
+          "field_name": "amount",
+          "field_type": "REAL",
+          "description": "PO amount",
+          "example": "5000.00"
+        }
+      ]
+    },
+    {
+      "name": "p2p_invoice",
+      "display_name": "Invoice",
+      "fields": [
+        {
+          "field_name": "invoice_number",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Invoice number",
+          "example": "INV-9001"
+        },
+        {
+          "field_name": "vendor_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Vendor for linking",
+          "example": "Acme Supplies Ltd"
+        },
+        {
+          "field_name": "total_amount",
+          "field_type": "REAL",
+          "is_required": true,
+          "description": "Invoice total",
+          "example": "4200.50"
+        },
+        {
+          "field_name": "invoice_date",
+          "field_type": "TEXT",
+          "description": "Invoice date",
+          "example": "2024-06-01"
+        },
+        {
+          "field_name": "po_number",
+          "field_type": "TEXT",
+          "description": "Related PO number",
+          "example": "PO-2201"
+        },
+        {
+          "field_name": "cost_center_code",
+          "field_type": "TEXT",
+          "description": "Cost center from PO context",
+          "example": "CC-ENG"
+        }
+      ]
+    }
+  ],
+  "entity_relationships": [
+    {
+      "ref": "p2p_po_from_vendor",
+      "relationship_name": "ordered_from",
+      "subject_entity_name": "p2p_purchase_order",
+      "object_entity_name": "p2p_vendor"
+    },
+    {
+      "ref": "p2p_po_charged_to",
+      "relationship_name": "charged_to",
+      "subject_entity_name": "p2p_purchase_order",
+      "object_entity_name": "p2p_cost_center"
+    },
+    {
+      "ref": "p2p_invoice_from_vendor",
+      "relationship_name": "billed_by",
+      "subject_entity_name": "p2p_invoice",
+      "object_entity_name": "p2p_vendor"
+    },
+    {
+      "ref": "p2p_invoice_matches_po",
+      "relationship_name": "matches_po",
+      "subject_entity_name": "p2p_invoice",
+      "object_entity_name": "p2p_purchase_order"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "P2P invoice ingest",
+      "description": "Validate and ingest invoices; link vendor and purchase order.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "validate-1",
+            "type": "validate",
+            "position": { "x": 280, "y": 200 },
+            "data": {
+              "label": "Validate invoice",
+              "rules": [
+                { "jsonField": "invoice_number", "format": "required" },
+                { "jsonField": "vendor_name", "format": "required" },
+                { "jsonField": "total_amount", "format": "number" }
+              ]
+            }
+          },
+          {
+            "id": "entities-invoice",
+            "type": "entities",
+            "position": { "x": 500, "y": 200 },
+            "data": {
+              "label": "Invoices",
+              "entityRef": "p2p_invoice",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "relationships-vendor",
+            "type": "relationships",
+            "position": { "x": 720, "y": 140 },
+            "data": {
+              "label": "Billed by vendor",
+              "entityRelationshipRef": "p2p_invoice_from_vendor",
+              "payloadLinkField": "vendor_name",
+              "objectEntityField": "vendor_name"
+            }
+          },
+          {
+            "id": "relationships-po",
+            "type": "relationships",
+            "position": { "x": 720, "y": 280 },
+            "data": {
+              "label": "Matches PO",
+              "entityRelationshipRef": "p2p_invoice_matches_po",
+              "payloadLinkField": "po_number",
+              "objectEntityField": "po_number"
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 960, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-validate",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "validate-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-invoice",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "entities-invoice",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-invoice-vendor",
+            "type": "deletable",
+            "source": "entities-invoice",
+            "target": "relationships-vendor",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-vendor-po",
+            "type": "deletable",
+            "source": "relationships-vendor",
+            "target": "relationships-po",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-fallback",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-invoice-fallback",
+            "type": "deletable",
+            "source": "entities-invoice",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-vendor-fallback",
+            "type": "deletable",
+            "source": "relationships-vendor",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-po-fallback",
+            "type": "deletable",
+            "source": "relationships-po",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

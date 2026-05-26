@@ -8,8 +8,8 @@ TypeScript [Model Context Protocol](https://modelcontextprotocol.io/) server (st
 2. **rdf-cache-service** on port `8181`
 
 ```bash
-cd data-layer-service && cargo run
-cd rdf-cache-service && cargo run
+cd core-services/data-layer-service && cargo run
+cd core-services/rdf-cache-service && cargo run
 ```
 
 ## Install and run

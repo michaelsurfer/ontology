@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -14,6 +14,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import { PageHeader } from '../components/PageHeader';
+import { PlaybookReturnNav } from '../components/PlaybookReturnNav';
+import { readPlaybookNavigationState } from '../utils/playbookNavigation';
 import { RecordFieldsCard } from '../components/recordHub/RecordFieldsCard';
 import { RecordIdentityStrip } from '../components/recordHub/RecordIdentityStrip';
 import { RecordHubGraphSection } from '../components/recordHub/RecordHubGraphSection';
@@ -92,7 +94,9 @@ function buildRelatedRecordRows(
 }
 
 export function RecordHubPage() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const playbookNavigation = readPlaybookNavigationState(location);
   const { entityId: entityIdRaw, rowId: rowIdRaw } = useParams();
   const entityId = Number(entityIdRaw);
   const rowId = Number(rowIdRaw);
@@ -242,8 +246,11 @@ export function RecordHubPage() {
   const { entity, row, relatedRows } = loadState;
   const recordTitle = buildRecordHubTitle(entity, row);
 
+  const entityPagePath = `/entities/${entityId}`;
+
   return (
     <Stack spacing={2}>
+      <PlaybookReturnNav currentSectionLabel={`Record · ${recordTitle}`} />
       <PageHeader
         title={recordTitle}
         subtitle={`${entity.display_name} · ${entity.name} · Row ${row.id}`}
@@ -251,12 +258,23 @@ export function RecordHubPage() {
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             <Button
               component={RouterLink}
-              to={`/entities/${entityId}`}
+              to={playbookNavigation?.playbookReturnPath || entityPagePath}
+              state={playbookNavigation ? undefined : location.state}
               variant="outlined"
               startIcon={<ArrowBackIcon />}
             >
-              Back
+              {playbookNavigation ? `Back to ${playbookNavigation.playbookName}` : 'Back'}
             </Button>
+            {playbookNavigation ? (
+              <Button
+                component={RouterLink}
+                to={entityPagePath}
+                state={location.state}
+                variant="outlined"
+              >
+                Record type
+              </Button>
+            ) : null}
             <Button
               component={RouterLink}
               to={`/rdf-graph${buildRecordHubGraphSearchParams(scopedGraphEntityIds)}`}
@@ -268,7 +286,7 @@ export function RecordHubPage() {
             <Button
               variant="contained"
               startIcon={<EditIcon />}
-              onClick={() => navigate(`/entities/${entityId}`)}
+              onClick={() => navigate(entityPagePath, { state: location.state })}
             >
               Edit on entity page
             </Button>

@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormHelperText,
   IconButton,
   MenuItem,
   Stack,
@@ -20,25 +22,119 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { PageHeader } from '../components/PageHeader';
-import { ontologyApi } from '../api/client';
-import type { EntityRelationshipDefinition, EntitySummary, RelationshipRecord } from '../types';
+import { buildRowLabelMap } from '../components/entityRelationshipLinksUtils';
+import { ontologyApi, readApiErrorMessage } from '../api/client';
+import type {
+  EntityDefinition,
+  EntityRelationshipDefinition,
+  EntityRowRecord,
+  EntitySummary,
+  RelationshipRecord,
+} from '../types';
+
+type EntityRowPickerContext = {
+  entityName: string;
+  rows: EntityRowRecord[];
+  labelByRowId: Map<number, string>;
+};
+
+// Load entity schema and rows so row links can show identifier labels instead of numeric ids.
+async function loadRowPickerContextForEntity(entityId: number): Promise<EntityRowPickerContext> {
+  const [entityResponse, rowsResponse] = await Promise.all([
+    ontologyApi.getEntity(entityId),
+    ontologyApi.listEntityRows(entityId),
+  ]);
+  const entityDefinition: EntityDefinition = entityResponse.data;
+  const entityName = entityDefinition.display_name || entityDefinition.name;
+  return {
+    entityName,
+    rows: rowsResponse.data,
+    labelByRowId: buildRowLabelMap(rowsResponse.data, entityName, entityDefinition.fields),
+  };
+}
 
 export function RowRelationshipsPage() {
   const [entities, setEntities] = useState<EntitySummary[]>([]);
   const [entityRelationships, setEntityRelationships] = useState<EntityRelationshipDefinition[]>([]);
   const [relationships, setRelationships] = useState<RelationshipRecord[]>([]);
+  const [rowContextByEntityId, setRowContextByEntityId] = useState<Map<number, EntityRowPickerContext>>(
+    new Map(),
+  );
   const [errorMessage, setErrorMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogLoadingRows, setDialogLoadingRows] = useState(false);
   const [selectedEntityRelationshipId, setSelectedEntityRelationshipId] = useState(0);
   const [relationshipName, setRelationshipName] = useState('');
   const [subjectEntityId, setSubjectEntityId] = useState(0);
   const [objectEntityId, setObjectEntityId] = useState(0);
-  const [subjectRowId, setSubjectRowId] = useState(1);
-  const [objectRowId, setObjectRowId] = useState(1);
+  const [subjectRowId, setSubjectRowId] = useState(0);
+  const [objectRowId, setObjectRowId] = useState(0);
 
   useEffect(() => {
     void reload();
   }, []);
+
+  const subjectRowContext = rowContextByEntityId.get(subjectEntityId);
+  const objectRowContext = rowContextByEntityId.get(objectEntityId);
+
+  const entityNameById = useMemo(() => {
+    const nameMap = new Map<number, string>();
+    for (const entity of entities) {
+      nameMap.set(entity.id, entity.name);
+    }
+    for (const [entityId, context] of rowContextByEntityId) {
+      nameMap.set(entityId, context.entityName);
+    }
+    return nameMap;
+  }, [entities, rowContextByEntityId]);
+
+  async function ensureRowContextsForEntityIds(
+    entityIds: number[],
+    validEntityIds?: Set<number>,
+  ): Promise<Map<number, EntityRowPickerContext>> {
+    const uniqueIds = [...new Set(entityIds.filter((id) => id > 0))].filter((entityId) =>
+      validEntityIds ? validEntityIds.has(entityId) : true,
+    );
+    const missingIds = uniqueIds.filter((entityId) => !rowContextByEntityId.has(entityId));
+    if (missingIds.length === 0) {
+      return rowContextByEntityId;
+    }
+
+    const loadResults = await Promise.allSettled(
+      missingIds.map(async (entityId) => {
+        const context = await loadRowPickerContextForEntity(entityId);
+        return [entityId, context] as const;
+      }),
+    );
+
+    const nextMap = new Map(rowContextByEntityId);
+    for (const result of loadResults) {
+      if (result.status === 'fulfilled') {
+        const [entityId, context] = result.value;
+        nextMap.set(entityId, context);
+      }
+    }
+    setRowContextByEntityId(nextMap);
+    return nextMap;
+  }
+
+  function collectEntityIdsFromRelationships(records: RelationshipRecord[]): number[] {
+    const entityIds: number[] = [];
+    for (const record of records) {
+      entityIds.push(record.subject_entity_id, record.object_entity_id);
+    }
+    return entityIds;
+  }
+
+  function formatRowLinkEndpoint(entityId: number, rowId: number): string {
+    const context = rowContextByEntityId.get(entityId);
+    const entityName = context?.entityName || entityNameById.get(entityId) || `Entity ${entityId}`;
+    const rowLabel = context?.labelByRowId.get(rowId);
+    if (rowLabel) {
+      return `${entityName}: ${rowLabel}`;
+    }
+    return `${entityName} (row ${rowId})`;
+  }
 
   async function reload() {
     try {
@@ -50,6 +146,11 @@ export function RowRelationshipsPage() {
       setEntities(entitiesResponse.data);
       setEntityRelationships(entityRelationshipsResponse.data);
       setRelationships(relationshipsResponse.data);
+
+      const validEntityIds = new Set(entitiesResponse.data.map((entity) => entity.id));
+      const entityIdsToLoad = collectEntityIdsFromRelationships(relationshipsResponse.data);
+      await ensureRowContextsForEntityIds(entityIdsToLoad, validEntityIds);
+
       if (entityRelationshipsResponse.data.length > 0) {
         applyEntityRelationshipSelection(entityRelationshipsResponse.data[0]);
       } else if (entitiesResponse.data.length > 0) {
@@ -58,7 +159,7 @@ export function RowRelationshipsPage() {
       }
       setErrorMessage('');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load');
+      setErrorMessage(readApiErrorMessage(error));
     }
   }
 
@@ -69,18 +170,89 @@ export function RowRelationshipsPage() {
     setObjectEntityId(definition.object_entity_id);
   }
 
-  function entityRelationshipLabel(definition: EntityRelationshipDefinition): string {
-    return `${definition.relationship_name}: ${entityLabel(definition.subject_entity_id)} → ${entityLabel(definition.object_entity_id)}`;
+  function pickDefaultRowId(context: EntityRowPickerContext | undefined): number {
+    if (!context || context.rows.length === 0) {
+      return 0;
+    }
+    return context.rows[0].id;
   }
 
-  function entityLabel(entityId: number): string {
-    const match = entities.find((entity) => entity.id === entityId);
-    return match ? match.name : String(entityId);
+  async function openCreateDialog() {
+    setDialogOpen(true);
+    setDialogLoadingRows(true);
+    setErrorMessage('');
+
+    try {
+      const definition =
+        entityRelationships.find((item) => item.id === selectedEntityRelationshipId) ||
+        entityRelationships[0];
+      if (!definition) {
+        return;
+      }
+
+      applyEntityRelationshipSelection(definition);
+      const validEntityIds = new Set(entities.map((entity) => entity.id));
+      const contextMap = await ensureRowContextsForEntityIds(
+        [definition.subject_entity_id, definition.object_entity_id],
+        validEntityIds,
+      );
+      const subjectContext = contextMap.get(definition.subject_entity_id);
+      const objectContext = contextMap.get(definition.object_entity_id);
+      setSubjectRowId(pickDefaultRowId(subjectContext));
+      setObjectRowId(pickDefaultRowId(objectContext));
+    } catch (error) {
+      setErrorMessage(readApiErrorMessage(error));
+    } finally {
+      setDialogLoadingRows(false);
+    }
+  }
+
+  async function handleEntityRelationshipChange(nextRelationshipId: number) {
+    const definition = entityRelationships.find((item) => item.id === nextRelationshipId);
+    if (!definition) {
+      return;
+    }
+
+    applyEntityRelationshipSelection(definition);
+    setDialogLoadingRows(true);
+    try {
+      const validEntityIds = new Set(entities.map((entity) => entity.id));
+      const contextMap = await ensureRowContextsForEntityIds(
+        [definition.subject_entity_id, definition.object_entity_id],
+        validEntityIds,
+      );
+      const subjectContext = contextMap.get(definition.subject_entity_id);
+      const objectContext = contextMap.get(definition.object_entity_id);
+      setSubjectRowId(pickDefaultRowId(subjectContext));
+      setObjectRowId(pickDefaultRowId(objectContext));
+    } catch (error) {
+      setErrorMessage(readApiErrorMessage(error));
+    } finally {
+      setDialogLoadingRows(false);
+    }
+  }
+
+  function entityRelationshipLabel(definition: EntityRelationshipDefinition): string {
+    const subjectName =
+      rowContextByEntityId.get(definition.subject_entity_id)?.entityName ||
+      entityNameById.get(definition.subject_entity_id) ||
+      String(definition.subject_entity_id);
+    const objectName =
+      rowContextByEntityId.get(definition.object_entity_id)?.entityName ||
+      entityNameById.get(definition.object_entity_id) ||
+      String(definition.object_entity_id);
+    return `${definition.relationship_name}: ${subjectName} → ${objectName}`;
   }
 
   async function handleCreate() {
     if (!selectedEntityRelationshipId) {
-      setErrorMessage('Select an entity relationship first (create one under Entity relationships if needed).');
+      setErrorMessage(
+        'Select an entity relationship first (create one under Entity relationships if needed).',
+      );
+      return;
+    }
+    if (!subjectRowId || !objectRowId) {
+      setErrorMessage('Select a subject and object record for this link.');
       return;
     }
     try {
@@ -94,7 +266,7 @@ export function RowRelationshipsPage() {
       setDialogOpen(false);
       await reload();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to create');
+      setErrorMessage(readApiErrorMessage(error));
     }
   }
 
@@ -106,8 +278,41 @@ export function RowRelationshipsPage() {
       await ontologyApi.deleteRelationship(relationshipId);
       await reload();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete');
+      setErrorMessage(readApiErrorMessage(error));
     }
+  }
+
+  function renderRowSelectField(
+    label: string,
+    entityId: number,
+    selectedRowId: number,
+    onRowIdChange: (rowId: number) => void,
+    context: EntityRowPickerContext | undefined,
+  ) {
+    const entityName = context?.entityName || entityNameById.get(entityId) || `Entity ${entityId}`;
+    const hasRows = Boolean(context && context.rows.length > 0);
+
+    return (
+      <TextField
+        select
+        label={label}
+        value={hasRows ? selectedRowId : ''}
+        onChange={(event) => onRowIdChange(Number(event.target.value))}
+        fullWidth
+        disabled={!hasRows || dialogLoadingRows}
+        helperText={
+          hasRows
+            ? `Showing identifier for each ${entityName} record. Links are stored by row id.`
+            : `No rows for ${entityName} yet. Add records on the entity page first.`
+        }
+      >
+        {(context?.rows || []).map((row) => (
+          <MenuItem key={row.id} value={row.id}>
+            {context?.labelByRowId.get(row.id) || `${entityName} #${row.id}`}
+          </MenuItem>
+        ))}
+      </TextField>
+    );
   }
 
   return (
@@ -116,7 +321,7 @@ export function RowRelationshipsPage() {
         title="Row links"
         subtitle="Instance-level relationships between specific entity rows."
         actions={
-          <Button variant="contained" onClick={() => setDialogOpen(true)}>
+          <Button variant="contained" onClick={() => void openCreateDialog()}>
             New row link
           </Button>
         }
@@ -142,10 +347,10 @@ export function RowRelationshipsPage() {
                   <TableCell>{relationship.id}</TableCell>
                   <TableCell>{relationship.relationship_name}</TableCell>
                   <TableCell>
-                    {entityLabel(relationship.subject_entity_id)} row {relationship.subject_row_id}
+                    {formatRowLinkEndpoint(relationship.subject_entity_id, relationship.subject_row_id)}
                   </TableCell>
                   <TableCell>
-                    {entityLabel(relationship.object_entity_id)} row {relationship.object_row_id}
+                    {formatRowLinkEndpoint(relationship.object_entity_id, relationship.object_row_id)}
                   </TableCell>
                   <TableCell align="right">
                     <IconButton color="error" onClick={() => void handleDelete(relationship.id)}>
@@ -173,15 +378,9 @@ export function RowRelationshipsPage() {
               select
               label="Entity relationship (required)"
               value={selectedEntityRelationshipId}
-              onChange={(event) => {
-                const nextId = Number(event.target.value);
-                const definition = entityRelationships.find((item) => item.id === nextId);
-                if (definition) {
-                  applyEntityRelationshipSelection(definition);
-                }
-              }}
+              onChange={(event) => void handleEntityRelationshipChange(Number(event.target.value))}
               fullWidth
-              disabled={entityRelationships.length === 0}
+              disabled={entityRelationships.length === 0 || dialogLoadingRows}
             >
               {entityRelationships.map((definition) => (
                 <MenuItem key={definition.id} value={definition.id}>
@@ -191,35 +390,53 @@ export function RowRelationshipsPage() {
             </TextField>
             <TextField
               label="Subject entity"
-              value={entityLabel(subjectEntityId)}
+              value={subjectRowContext?.entityName || entityNameById.get(subjectEntityId) || ''}
               fullWidth
               disabled
             />
-            <TextField
-              label="Subject row id"
-              type="number"
-              value={subjectRowId}
-              onChange={(event) => setSubjectRowId(Number(event.target.value))}
-              fullWidth
-            />
+            {dialogLoadingRows ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CircularProgress size={20} />
+                <FormHelperText sx={{ m: 0 }}>Loading records…</FormHelperText>
+              </Stack>
+            ) : (
+              renderRowSelectField(
+                'Subject record',
+                subjectEntityId,
+                subjectRowId,
+                setSubjectRowId,
+                subjectRowContext,
+              )
+            )}
             <TextField
               label="Object entity"
-              value={entityLabel(objectEntityId)}
+              value={objectRowContext?.entityName || entityNameById.get(objectEntityId) || ''}
               fullWidth
               disabled
             />
-            <TextField
-              label="Object row id"
-              type="number"
-              value={objectRowId}
-              onChange={(event) => setObjectRowId(Number(event.target.value))}
-              fullWidth
-            />
+            {dialogLoadingRows ? null : (
+              renderRowSelectField(
+                'Object record',
+                objectEntityId,
+                objectRowId,
+                setObjectRowId,
+                objectRowContext,
+              )
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={() => void handleCreate()} disabled={entityRelationships.length === 0}>
+          <Button
+            variant="contained"
+            onClick={() => void handleCreate()}
+            disabled={
+              entityRelationships.length === 0 ||
+              dialogLoadingRows ||
+              !subjectRowId ||
+              !objectRowId
+            }
+          >
             Create
           </Button>
         </DialogActions>

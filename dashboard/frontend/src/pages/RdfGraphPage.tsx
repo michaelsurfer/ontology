@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { ontologyApi } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
+import { PlaybookReturnNav } from '../components/PlaybookReturnNav';
 import { RdfGraphView } from '../components/RdfGraphView';
 import type { GraphViewModel } from '../types';
 
@@ -65,6 +66,7 @@ export function RdfGraphPage() {
 
   return (
     <Stack spacing={2}>
+      <PlaybookReturnNav currentSectionLabel="Graph View" />
       <PageHeader
         title="Graph View"
         subtitle={

@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "crates/policy-engine",
+    "data-layer-service",
+    "rdf-cache-service",
+]

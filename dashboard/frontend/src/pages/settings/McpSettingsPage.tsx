@@ -1,4 +1,6 @@
 import { PageHeader } from '../../components/PageHeader';
+import { McpProviderGuides } from '../../components/mcp/McpProviderGuides';
+import { mcpDevStdioConfigJson } from '../../components/mcp/mcpConfigSnippet';
 import {
   Alert,
   Box,
@@ -9,76 +11,39 @@ import {
   Typography,
 } from '@mui/material';
 
-const mcpConfigExample = `{
-  "mcpServers": {
-    "anythinggraph": {
-      "command": "node",
-      "args": ["<absolute-path>/ontology/mcp-service/dist/index.js"],
-      "env": {
-        "DATA_LAYER_URL": "http://127.0.0.1:8182",
-        "RDF_CACHE_URL": "http://127.0.0.1:8181"
-      }
-    }
-  }
-}`;
-
-const mcpDevConfigExample = `{
-  "mcpServers": {
-    "anythinggraph": {
-      "command": "npx",
-      "args": ["tsx", "<absolute-path>/ontology/mcp-service/src/index.ts"],
-      "env": {
-        "DATA_LAYER_URL": "http://127.0.0.1:8182",
-        "RDF_CACHE_URL": "http://127.0.0.1:8181"
-      }
-    }
-  }
-}`;
-
 export function McpSettingsPage() {
   return (
     <Stack spacing={2}>
       <PageHeader
         title="MCP integration"
-        subtitle="Connect Cursor or other MCP hosts so agents can read and write entity data and run SPARQL."
+        subtitle="Connect Cursor, Claude Desktop, OpenAI Agents SDK, and other MCP hosts to AnythingGraph via stdio."
       />
 
       <Alert severity="info">
         Before using MCP, start <strong>data-layer-service</strong> (port 8182) and{' '}
         <strong>rdf-cache-service</strong> (port 8181). Build the MCP server with{' '}
-        <code>cd mcp-service && npm install && npm run build</code>.
+        <code>cd mcp-service && npm install && npm run build</code>. AnythingGraph MCP speaks{' '}
+        <strong>stdio</strong> — hosts must launch the Node process locally (not HTTP-only connectors).
       </Alert>
 
       <Card variant="outlined">
         <CardContent>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            1. Add MCP server config
+            Connect your LLM host
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            In Cursor, open <strong>Settings → MCP</strong> or create a project file at{' '}
-            <code>.cursor/mcp.json</code> in your repo root. Replace{' '}
-            <code>&lt;absolute-path&gt;</code> with the full path to this AnythingGraph repository.
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Pick your tool below. Each uses the same <code>mcpServers.anythinggraph</code> block.
+            Installed playbooks include a playbook id — pass that in agent prompts (see Playbooks
+            → Connect via MCP).
           </Typography>
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              p: 2,
-              bgcolor: 'grey.100',
-              borderRadius: 1,
-              overflow: 'auto',
-              fontSize: 12,
-            }}
-          >
-            {mcpConfigExample}
-          </Box>
+          <McpProviderGuides defaultExpandFirst />
         </CardContent>
       </Card>
 
       <Card variant="outlined">
         <CardContent>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            2. Development config (optional)
+            Development config (optional)
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             Use <code>npx tsx</code> on the TypeScript source if you prefer not to run{' '}
@@ -95,7 +60,7 @@ export function McpSettingsPage() {
               fontSize: 12,
             }}
           >
-            {mcpDevConfigExample}
+            {mcpDevStdioConfigJson}
           </Box>
         </CardContent>
       </Card>
@@ -103,7 +68,7 @@ export function McpSettingsPage() {
       <Card variant="outlined">
         <CardContent>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            3. Available tools
+            Available MCP tools
           </Typography>
           <Typography component="ul" variant="body2" sx={{ pl: 2, m: 0 }}>
             <li>
@@ -111,10 +76,10 @@ export function McpSettingsPage() {
             </li>
             <li>
               <code>list_entities</code>, <code>get_entity</code>, <code>list_entity_rows</code>,{' '}
-              <code>create_entity_row</code>
+              <code>create_entity_row</code>, <code>update_entity_row</code>
             </li>
             <li>
-              <code>list_entity_relationships</code>, <code>list_row_relationships</code>
+              <code>create_entity</code>, <code>update_entity</code>, schema and row relationships
             </li>
             <li>
               <code>export_turtle</code>, <code>sync_rdf_cache</code>, <code>run_sparql</code>
@@ -125,11 +90,10 @@ export function McpSettingsPage() {
             relationships.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>
-            Full documentation: <code>mcp-service/README.md</code> in the repository. See also{' '}
+            Full documentation: <code>mcp-service/README.md</code> in the repository. Protocol:{' '}
             <Link href="https://modelcontextprotocol.io/" target="_blank" rel="noopener">
               modelcontextprotocol.io
             </Link>
-            .
           </Typography>
         </CardContent>
       </Card>

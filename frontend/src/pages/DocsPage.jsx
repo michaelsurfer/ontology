@@ -48,14 +48,14 @@ export function DocsPage() {
             service <code>POST /cache/load</code> (best effort; writes still succeed if Rust is down).
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            <b>Rust service</b> (<code>rdf-cache-service/</code>) holds an in-memory Turtle cache and runs{' '}
+            <b>Rust service</b> (<code>core-services/rdf-cache-service/</code>) holds an in-memory Turtle cache and runs{' '}
             <b>SPARQL SELECT</b> with Oxigraph. Query Studio and <code>POST /api/sparql</code> go through this service.
             The <b>context map</b> in the app does not require Rust; it reads schema metadata from Node only.
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Backend env: <code>RDF_CACHE_URL</code> (default <code>http://127.0.0.1:8181</code>). Run Rust with{' '}
-            <code>cd rdf-cache-service && cargo run</code> — see repo <code>README.md</code> and{' '}
-            <code>rdf-cache-service/README.md</code>.
+            <code>cd core-services/rdf-cache-service && cargo run</code> — see repo <code>README.md</code> and{' '}
+            <code>core-services/rdf-cache-service/README.md</code>.
           </Typography>
         </CardContent>
       </Card>
@@ -447,7 +447,7 @@ node packages/ontox-cli/src/main.js sparql query --query "PREFIX ex: <http://exa
       </Typography>
 
       <Typography variant="body2" color="text.secondary">
-        Related: see the repository root <code>README.md</code> and <code>rdf-cache-service/README.md</code> for runbooks
+        Related: see the repository root <code>README.md</code> and <code>core-services/rdf-cache-service/README.md</code> for runbooks
         and curl examples.
       </Typography>
     </Stack>

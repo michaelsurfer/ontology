@@ -1,0 +1,117 @@
+{
+  "id": "invoice-records-structured",
+  "name": "Invoice records (structured)",
+  "description": "Structured invoice facts ingested via JSON — graph and validation without document extraction.",
+  "instructions": "1. Install and open the playbook view for the Invoice record type and ingest workflow.\n2. POST JSON from your upstream system (fields already extracted elsewhere): invoice_number, vendor_name, total_amount, invoice_date.\n3. Validation enforces required business fields; failures go to the landing zone.\n4. Sync RDF cache and query invoices in Graph View / SPARQL.\n\n**MCP (playbook id: `invoice-records-structured`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "inv_invoice",
+      "display_name": "Invoice",
+      "fields": [
+        {
+          "field_name": "invoice_number",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Unique invoice identifier",
+          "example": "INV-2024-0042"
+        },
+        {
+          "field_name": "vendor_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Vendor or issuer name",
+          "example": "Acme Supplies Ltd"
+        },
+        {
+          "field_name": "total_amount",
+          "field_type": "REAL",
+          "is_required": true,
+          "description": "Total amount due",
+          "example": "1250.00"
+        },
+        {
+          "field_name": "invoice_date",
+          "field_type": "TEXT",
+          "description": "Invoice date (ISO or text)",
+          "example": "2024-03-15"
+        }
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Invoice structured ingest",
+      "description": "Validate and insert structured invoice rows from JSON webhook payloads.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "validate-1",
+            "type": "validate",
+            "position": { "x": 300, "y": 200 },
+            "data": {
+              "label": "Validate invoice",
+              "rules": [
+                { "jsonField": "invoice_number", "format": "required" },
+                { "jsonField": "vendor_name", "format": "required" },
+                { "jsonField": "total_amount", "format": "number" }
+              ]
+            }
+          },
+          {
+            "id": "entities-1",
+            "type": "entities",
+            "position": { "x": 520, "y": 200 },
+            "data": {
+              "label": "Invoices",
+              "entityRef": "inv_invoice",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 740, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-validate",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "validate-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-entities",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "entities-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-fallback",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-entities-fallback",
+            "type": "deletable",
+            "source": "entities-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+# OSS built-in roles for AnythingGraph (single source of truth).
+# Bundled with the policy-engine crate at config/oss-roles.yaml.
+# Other services must load policy via OssPolicyConfig::load(), not by reading this file directly.
+# Do NOT add or remove roles at runtime; restart services after any change.
+# Custom roles are an Enterprise feature.
+
+roles:
+  - id: viewer
+    display_name: Viewer
+    description: Read-only access to non-sensitive fields.
+
+  - id: editor
+    display_name: Editor
+    description: Read and write access to operational fields; no sensitive financial or HR data.
+
+  - id: analyst
+    display_name: Analyst
+    description: Read access to operational and financial fields for reporting purposes.
+
+  - id: admin
+    display_name: Admin
+    description: Full read access across all fields. Write access follows entity-level rules.
+
+# Field-level visibility rules.
+# List the role ids that may READ each field.
+# Any field NOT listed here is readable by all four roles.
+# Omitting an entity block means all fields are open to all roles.
+#
+# Example (uncomment and adapt per your entity field names):
+#
+# field_policies:
+#   employee:
+#     salary:
+#       read: [analyst, admin]
+#     national_id:
+#       read: [admin]
+#   p2p_purchase_order:
+#     unit_cost:
+#       read: [analyst, admin]
+
+field_policies: {}

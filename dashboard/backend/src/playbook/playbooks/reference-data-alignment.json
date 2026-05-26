@@ -1,0 +1,131 @@
+{
+  "id": "reference-data-alignment",
+  "name": "Reference data alignment",
+  "description": "Map external ERP field names to a canonical Customer record type, validate, then persist.",
+  "instructions": "1. Install and open the playbook view for the Customer record type and alignment workflow.\n2. POST JSON using source-system keys (cust_id, company, contact_email) — the Field Mapper renames them to canonical fields.\n3. Failed validations route to the landing zone.\n4. Use Graph View after RDF sync to see the Customer class in your ontology.\n\n**MCP (playbook id: `reference-data-alignment`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "ref_customer",
+      "display_name": "Customer",
+      "fields": [
+        {
+          "field_name": "customer_id",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Canonical customer identifier",
+          "example": "C-10042"
+        },
+        {
+          "field_name": "legal_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Legal company name",
+          "example": "Northwind Traders Ltd"
+        },
+        {
+          "field_name": "contact_email",
+          "field_type": "TEXT",
+          "description": "Primary contact email",
+          "example": "billing@northwind.example"
+        }
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Customer alignment ingest",
+      "description": "Rename ERP fields, validate, and insert Customer rows.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "mapper-1",
+            "type": "field_mapper",
+            "position": { "x": 300, "y": 200 },
+            "data": {
+              "label": "ERP field map",
+              "entityRef": "ref_customer",
+              "mappings": [
+                { "sourceField": "cust_id", "targetField": "customer_id", "targetMode": "custom" },
+                { "sourceField": "company", "targetField": "legal_name", "targetMode": "custom" },
+                { "sourceField": "email", "targetField": "contact_email", "targetMode": "custom" }
+              ]
+            }
+          },
+          {
+            "id": "validate-1",
+            "type": "validate",
+            "position": { "x": 520, "y": 200 },
+            "data": {
+              "label": "Validate",
+              "rules": [
+                { "jsonField": "customer_id", "format": "required" },
+                { "jsonField": "legal_name", "format": "required" },
+                { "jsonField": "contact_email", "format": "email" }
+              ]
+            }
+          },
+          {
+            "id": "entities-1",
+            "type": "entities",
+            "position": { "x": 740, "y": 200 },
+            "data": {
+              "label": "Customers",
+              "entityRef": "ref_customer",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 960, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-mapper",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "mapper-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-mapper-validate",
+            "type": "deletable",
+            "source": "mapper-1",
+            "target": "validate-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-entities",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "entities-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-fallback",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-entities-fallback",
+            "type": "deletable",
+            "source": "entities-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

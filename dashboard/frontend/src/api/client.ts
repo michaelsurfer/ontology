@@ -190,7 +190,7 @@ export const ontologyApi = {
 
   deleteLandingZoneRecord: (recordId: number) => apiClient.delete(`/landing-zone/${recordId}`),
 
-  listTemplates: () =>
+  listPlaybooks: () =>
     apiClient.get<
       Array<{
         id: string;
@@ -219,9 +219,9 @@ export const ontologyApi = {
           workflow_id: number;
         }>;
       }>
-    >('/templates'),
+    >('/playbooks'),
 
-  getTemplate: (templateId: string) =>
+  getPlaybook: (playbookId: string) =>
     apiClient.get<{
       id: string;
       name: string;
@@ -250,26 +250,26 @@ export const ontologyApi = {
         description?: string;
         pipelineSteps: string[];
       }>;
-    }>(`/templates/${templateId}`),
+    }>(`/playbooks/${playbookId}`),
 
-  installTemplate: (templateId: string) =>
+  installPlaybook: (playbookId: string) =>
     apiClient.post<{
       ok: boolean;
-      templateId: string;
-      templateName: string;
+      playbookId: string;
+      playbookName: string;
       entities: Array<{ name: string; entityId: number; created: boolean }>;
       entityRelationships: Array<{ ref: string; entityRelationshipId: number; created: boolean }>;
       workflows: Array<{ name: string; workflowId: number; created: boolean }>;
-    }>(`/templates/${templateId}/install`),
+    }>(`/playbooks/${playbookId}/install`),
 
-  uninstallTemplate: (templateId: string) =>
+  uninstallPlaybook: (playbookId: string) =>
     apiClient.delete<{
       ok: boolean;
-      templateId: string;
-      templateName: string;
+      playbookId: string;
+      playbookName: string;
       entities: Array<{ name: string; entityId: number }>;
       entityRelationships: Array<{ ref: string; entityRelationshipId: number }>;
       workflows: Array<{ name: string; workflowId: number }>;
-    }>(`/templates/${templateId}/install`),
+    }>(`/playbooks/${playbookId}/install`),
 
 };

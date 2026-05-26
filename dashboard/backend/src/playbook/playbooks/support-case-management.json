@@ -1,0 +1,217 @@
+{
+  "id": "support-case-management",
+  "name": "Support case management",
+  "description": "Accounts, contacts, and support cases with about_account and raised_by links — for service hubs and AI agents.",
+  "instructions": "1. Install and open the playbook view to browse Account, Contact, Case, and schema relationships.\n2. POST JSON to the case ingest webhook. Each row: case_number, subject, status, account_name, contact_email (optional agent_email).\n3. Ensure accounts exist or create them first; contacts link by email, cases link to account and contact.\n4. Use Row links and Graph View after RDF sync to traverse cases per account.\n\nExample payload:\n{ \"records\": [{ \"case_number\": \"CS-1042\", \"subject\": \"Login issue\", \"status\": \"open\", \"priority\": \"high\", \"account_name\": \"Northwind Traders\", \"contact_email\": \"jane@northwind.example\" }] }\n\n**MCP (playbook id: `support-case-management`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row / create_row_relationship. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "scm_account",
+      "display_name": "Account",
+      "fields": [
+        {
+          "field_name": "account_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Customer or account name",
+          "example": "Northwind Traders"
+        },
+        {
+          "field_name": "tier",
+          "field_type": "TEXT",
+          "description": "Support tier",
+          "example": "Enterprise"
+        }
+      ]
+    },
+    {
+      "name": "scm_contact",
+      "display_name": "Contact",
+      "fields": [
+        {
+          "field_name": "email",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Contact email",
+          "example": "jane@northwind.example"
+        },
+        {
+          "field_name": "full_name",
+          "field_type": "TEXT",
+          "description": "Contact name",
+          "example": "Jane Smith"
+        },
+        {
+          "field_name": "account_name",
+          "field_type": "TEXT",
+          "description": "Account name for linking",
+          "example": "Northwind Traders"
+        }
+      ]
+    },
+    {
+      "name": "scm_case",
+      "display_name": "Case",
+      "fields": [
+        {
+          "field_name": "case_number",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Unique case identifier",
+          "example": "CS-1042"
+        },
+        {
+          "field_name": "subject",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Case subject line",
+          "example": "Cannot reset password"
+        },
+        {
+          "field_name": "status",
+          "field_type": "TEXT",
+          "description": "Case status",
+          "example": "open"
+        },
+        {
+          "field_name": "priority",
+          "field_type": "TEXT",
+          "description": "Priority level",
+          "example": "high"
+        },
+        {
+          "field_name": "account_name",
+          "field_type": "TEXT",
+          "description": "Account to link",
+          "example": "Northwind Traders"
+        },
+        {
+          "field_name": "contact_email",
+          "field_type": "TEXT",
+          "description": "Contact email to link as requester",
+          "example": "jane@northwind.example"
+        }
+      ]
+    }
+  ],
+  "entity_relationships": [
+    {
+      "ref": "scm_contact_belongs_to_account",
+      "relationship_name": "belongs_to_account",
+      "subject_entity_name": "scm_contact",
+      "object_entity_name": "scm_account"
+    },
+    {
+      "ref": "scm_case_about_account",
+      "relationship_name": "about_account",
+      "subject_entity_name": "scm_case",
+      "object_entity_name": "scm_account"
+    },
+    {
+      "ref": "scm_case_raised_by",
+      "relationship_name": "raised_by",
+      "subject_entity_name": "scm_case",
+      "object_entity_name": "scm_contact"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Support case ingest",
+      "description": "Create cases and link to accounts and contacts from JSON payloads.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "entities-case",
+            "type": "entities",
+            "position": { "x": 320, "y": 200 },
+            "data": {
+              "label": "Cases",
+              "entityRef": "scm_case",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "relationships-account",
+            "type": "relationships",
+            "position": { "x": 560, "y": 140 },
+            "data": {
+              "label": "About account",
+              "entityRelationshipRef": "scm_case_about_account",
+              "payloadLinkField": "account_name",
+              "objectEntityField": "account_name"
+            }
+          },
+          {
+            "id": "relationships-contact",
+            "type": "relationships",
+            "position": { "x": 560, "y": 280 },
+            "data": {
+              "label": "Raised by",
+              "entityRelationshipRef": "scm_case_raised_by",
+              "payloadLinkField": "contact_email",
+              "objectEntityField": "email"
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 800, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-case",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "entities-case",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-case-account",
+            "type": "deletable",
+            "source": "entities-case",
+            "target": "relationships-account",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-account-contact",
+            "type": "deletable",
+            "source": "relationships-account",
+            "target": "relationships-contact",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-case-fallback",
+            "type": "deletable",
+            "source": "entities-case",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-account-fallback",
+            "type": "deletable",
+            "source": "relationships-account",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-contact-fallback",
+            "type": "deletable",
+            "source": "relationships-contact",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -12,14 +12,14 @@ TypeScript dashboard for managing graph data through **data-layer-service** (por
 1. **data-layer-service** running:
 
 ```bash
-cd data-layer-service
+cd core-services/data-layer-service
 cargo run
 ```
 
 2. **rdf-cache-service** running (for **Sync cache** in the sidebar):
 
 ```bash
-cd rdf-cache-service
+cd core-services/rdf-cache-service
 cargo run
 ```
 

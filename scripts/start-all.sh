@@ -86,8 +86,8 @@ echo "AnythingGraph — starting all services from ${ROOT_DIR}"
 echo ""
 
 # 1–2: Rust services (dashboard and MCP depend on these URLs).
-start_service "data-layer" "data-layer-service" cargo run
-start_service "rdf-cache" "rdf-cache-service" cargo run
+start_service "data-layer" "core-services/data-layer-service" cargo run
+start_service "rdf-cache" "core-services/rdf-cache-service" cargo run
 
 wait_for_port 8182 "data-layer-service"
 wait_for_port 8181 "rdf-cache-service"

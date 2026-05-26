@@ -11,7 +11,7 @@ import { buildGraphFromTurtle, attachEntityIdsToClassNodes } from './turtleGraph
 import type { TurtleExportRequest } from './types.js';
 import { getWorkflowDatabase } from './workflow/database.js';
 import { registerLandingZoneRoutes } from './landingZoneRoutes.js';
-import { registerTemplateRoutes } from './templateRoutes.js';
+import { registerPlaybookRoutes } from './playbookRoutes.js';
 import { registerWorkflowRoutes } from './workflowRoutes.js';
 
 const defaultPort = 5180;
@@ -27,7 +27,7 @@ function startDashboardServer() {
   getWorkflowDatabase();
   registerWorkflowRoutes(application);
   registerLandingZoneRoutes(application);
-  registerTemplateRoutes(application);
+  registerPlaybookRoutes(application);
 
   application.get('/api/health', async (_request, response) => {
     try {

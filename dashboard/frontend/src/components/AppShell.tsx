@@ -36,7 +36,7 @@ type NavigationItem = {
 
 const navigationItems: NavigationItem[] = [
   { to: '/', label: 'Overview', icon: <HomeOutlinedIcon fontSize="small" /> },
-  { to: '/templates', label: 'Templates', icon: <ViewModuleOutlinedIcon fontSize="small" /> },
+  { to: '/playbooks', label: 'Playbooks', icon: <ViewModuleOutlinedIcon fontSize="small" /> },
   { to: '/entities', label: 'Entities', icon: <StorageOutlinedIcon fontSize="small" /> },
   {
     to: '/entity-relationships',
@@ -72,7 +72,7 @@ function isNavigationItemSelected(pathname: string, itemPath: string): boolean {
   if (itemPath === '/landing-zone' && pathname.startsWith('/landing-zone')) {
     return true;
   }
-  if (itemPath === '/templates' && pathname.startsWith('/templates')) {
+  if (itemPath === '/playbooks' && pathname.startsWith('/playbooks')) {
     return true;
   }
   if (itemPath.startsWith('/settings') && pathname.startsWith('/settings')) {
@@ -83,6 +83,10 @@ function isNavigationItemSelected(pathname: string, itemPath: string): boolean {
 
 // Resolve a short label for the top app bar from the current route.
 function resolveTopBarTitle(pathname: string): string {
+  if (/^\/playbooks\/[^/]+\/view$/.test(pathname)) {
+    return 'Playbook';
+  }
+
   if (/^\/entities\/\d+\/rows\/\d+/.test(pathname)) {
     return 'Record hub';
   }

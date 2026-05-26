@@ -52,6 +52,7 @@ dashboard/backend/data/
 .cursor/
 
 # Rust services
-rdf-cache-service/target/
-data-layer-service/target/
-data-layer-service/data/
+core-services/target/
+core-services/rdf-cache-service/target/
+core-services/data-layer-service/target/
+core-services/data-layer-service/data/

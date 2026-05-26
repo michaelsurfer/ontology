@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlowProvider,
   addEdge,
@@ -37,6 +37,8 @@ import { ValidateNodeSettings } from '../components/workflow/ValidateNodeSetting
 import { WorkflowEditorCanvas } from '../components/workflow/WorkflowEditorCanvas';
 import { WorkflowPaletteItem } from '../components/workflow/WorkflowPaletteItem';
 import { WorkflowRunResultView } from '../components/workflow/WorkflowRunResultView';
+import { PlaybookReturnNav } from '../components/PlaybookReturnNav';
+import { readPlaybookNavigationState } from '../utils/playbookNavigation';
 import { ontologyApi } from '../api/client';
 import type { EntityDefinition, EntityRelationshipDefinition, EntitySummary } from '../types';
 import type {
@@ -283,8 +285,10 @@ function flowStateToGraph(nodes: Node[], edges: Edge[]): WorkflowGraph {
 
 export function WorkflowEditorPage() {
   const { workflowId: workflowIdRaw } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const isNewWorkflow = workflowIdRaw === 'new';
+  const playbookNavigation = readPlaybookNavigationState(location);
 
   const [workflowName, setWorkflowName] = useState('New workflow');
   const [workflowNumericId, setWorkflowNumericId] = useState<number | null>(null);
@@ -560,6 +564,11 @@ export function WorkflowEditorPage() {
 
   return (
     <Stack spacing={2} sx={{ height: 'calc(100vh - 120px)' }}>
+      <PlaybookReturnNav
+        currentSectionLabel={
+          playbookNavigation ? `Workflow · ${workflowName}` : undefined
+        }
+      />
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
         <Box sx={{ flex: 1, minWidth: 200, maxWidth: 560 }}>
           <TextField
@@ -572,9 +581,11 @@ export function WorkflowEditorPage() {
               sx: { fontSize: '1.75rem', fontWeight: 700 },
             }}
           />
-          <Button component={RouterLink} to="/workflows" size="small" sx={{ mt: 0.5 }}>
-            Back to list
-          </Button>
+          {!playbookNavigation ? (
+            <Button component={RouterLink} to="/workflows" size="small" sx={{ mt: 0.5 }}>
+              Back to list
+            </Button>
+          ) : null}
         </Box>
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" onClick={() => setRunDialogOpen(true)}>

@@ -1,0 +1,223 @@
+{
+  "id": "document-registry",
+  "name": "Document registry",
+  "description": "Document and contract metadata linked to parties — context layer for RAG and agents (no OCR in playbook).",
+  "instructions": "1. Install and open the playbook view for Party, Contract, and Document record types.\n2. POST JSON document metadata: document_id, title, document_type, party_name, contract_id (optional).\n3. Create parties and contracts first, or include party_name / contract_id on each document row.\n4. Agents use MCP to list documents and traverse references_party / under_contract links.\n\nExample payload:\n{ \"records\": [{ \"document_id\": \"DOC-551\", \"title\": \"Master services agreement\", \"document_type\": \"contract_pdf\", \"effective_date\": \"2024-01-15\", \"party_name\": \"Contoso Holdings\", \"contract_id\": \"CTR-100\" }] }\n\n**MCP (playbook id: `document-registry`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row / create_row_relationship. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "doc_party",
+      "display_name": "Party",
+      "fields": [
+        {
+          "field_name": "party_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Party or organization name",
+          "example": "Contoso Holdings"
+        },
+        {
+          "field_name": "party_type",
+          "field_type": "TEXT",
+          "description": "Party classification",
+          "example": "customer"
+        }
+      ]
+    },
+    {
+      "name": "doc_contract",
+      "display_name": "Contract",
+      "fields": [
+        {
+          "field_name": "contract_id",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Contract identifier",
+          "example": "CTR-100"
+        },
+        {
+          "field_name": "contract_title",
+          "field_type": "TEXT",
+          "description": "Contract title",
+          "example": "MSA 2024"
+        },
+        {
+          "field_name": "party_name",
+          "field_type": "TEXT",
+          "description": "Counterparty for linking",
+          "example": "Contoso Holdings"
+        }
+      ]
+    },
+    {
+      "name": "doc_document",
+      "display_name": "Document",
+      "fields": [
+        {
+          "field_name": "document_id",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Document identifier in source system",
+          "example": "DOC-551"
+        },
+        {
+          "field_name": "title",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Document title",
+          "example": "Master services agreement"
+        },
+        {
+          "field_name": "document_type",
+          "field_type": "TEXT",
+          "description": "MIME or business type",
+          "example": "contract_pdf"
+        },
+        {
+          "field_name": "effective_date",
+          "field_type": "TEXT",
+          "description": "Effective date",
+          "example": "2024-01-15"
+        },
+        {
+          "field_name": "source_system",
+          "field_type": "TEXT",
+          "description": "Originating system",
+          "example": "sharepoint"
+        },
+        {
+          "field_name": "party_name",
+          "field_type": "TEXT",
+          "description": "Primary party for linking",
+          "example": "Contoso Holdings"
+        },
+        {
+          "field_name": "contract_id",
+          "field_type": "TEXT",
+          "description": "Contract for linking",
+          "example": "CTR-100"
+        }
+      ]
+    }
+  ],
+  "entity_relationships": [
+    {
+      "ref": "doc_contract_with_party",
+      "relationship_name": "with_party",
+      "subject_entity_name": "doc_contract",
+      "object_entity_name": "doc_party"
+    },
+    {
+      "ref": "doc_document_references_party",
+      "relationship_name": "references_party",
+      "subject_entity_name": "doc_document",
+      "object_entity_name": "doc_party"
+    },
+    {
+      "ref": "doc_document_under_contract",
+      "relationship_name": "under_contract",
+      "subject_entity_name": "doc_document",
+      "object_entity_name": "doc_contract"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Document metadata ingest",
+      "description": "Ingest document metadata and link to party and contract.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "entities-document",
+            "type": "entities",
+            "position": { "x": 320, "y": 200 },
+            "data": {
+              "label": "Documents",
+              "entityRef": "doc_document",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "relationships-party",
+            "type": "relationships",
+            "position": { "x": 560, "y": 140 },
+            "data": {
+              "label": "References party",
+              "entityRelationshipRef": "doc_document_references_party",
+              "payloadLinkField": "party_name",
+              "objectEntityField": "party_name"
+            }
+          },
+          {
+            "id": "relationships-contract",
+            "type": "relationships",
+            "position": { "x": 560, "y": 280 },
+            "data": {
+              "label": "Under contract",
+              "entityRelationshipRef": "doc_document_under_contract",
+              "payloadLinkField": "contract_id",
+              "objectEntityField": "contract_id"
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 800, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-document",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "entities-document",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-document-party",
+            "type": "deletable",
+            "source": "entities-document",
+            "target": "relationships-party",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-party-contract",
+            "type": "deletable",
+            "source": "relationships-party",
+            "target": "relationships-contract",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-document-fallback",
+            "type": "deletable",
+            "source": "entities-document",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-party-fallback",
+            "type": "deletable",
+            "source": "relationships-party",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-contract-fallback",
+            "type": "deletable",
+            "source": "relationships-contract",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "id": "crm-relationship-graph",
+  "name": "CRM relationship graph",
+  "description": "Accounts and contacts with belongs_to_account schema links and ingest workflow.",
+  "instructions": "1. Install and open the playbook view for Account, Contact, schema relationships, and the ingest workflow.\n2. POST JSON to the webhook with contact rows (full_name, email, account_name).\n3. Create account rows first or include account_name on each contact for automatic linking.\n4. Inspect row links on the Row links page and the schema on Graph View after syncing RDF cache.\n\n**MCP (playbook id: `crm-relationship-graph`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row / create_row_relationship. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "crm_account",
+      "display_name": "Account",
+      "fields": [
+        {
+          "field_name": "account_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Company or account name",
+          "example": "Northwind Traders"
+        },
+        {
+          "field_name": "industry",
+          "field_type": "TEXT",
+          "description": "Industry sector",
+          "example": "Retail"
+        }
+      ]
+    },
+    {
+      "name": "crm_contact",
+      "display_name": "Contact",
+      "fields": [
+        {
+          "field_name": "full_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Contact full name",
+          "example": "Jane Smith"
+        },
+        {
+          "field_name": "email",
+          "field_type": "TEXT",
+          "description": "Work email",
+          "example": "jane@northwind.example"
+        },
+        {
+          "field_name": "account_name",
+          "field_type": "TEXT",
+          "description": "Account name used to link this contact",
+          "example": "Northwind Traders"
+        }
+      ]
+    }
+  ],
+  "entity_relationships": [
+    {
+      "ref": "contact_belongs_to_account",
+      "relationship_name": "belongs_to_account",
+      "subject_entity_name": "crm_contact",
+      "object_entity_name": "crm_account"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "CRM contact ingest",
+      "description": "Create contacts and link them to accounts when account_name matches.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "entities-contact",
+            "type": "entities",
+            "position": { "x": 360, "y": 200 },
+            "data": {
+              "label": "Contacts",
+              "entityRef": "crm_contact",
+              "minMatchScore": 1
+            }
+          },
+          {
+            "id": "relationships-1",
+            "type": "relationships",
+            "position": { "x": 640, "y": 200 },
+            "data": {
+              "label": "Link to account",
+              "entityRelationshipRef": "contact_belongs_to_account",
+              "payloadLinkField": "account_name",
+              "objectEntityField": "account_name"
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 920, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-contact",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "entities-contact",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-contact-rel",
+            "type": "deletable",
+            "source": "entities-contact",
+            "target": "relationships-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-contact-fallback",
+            "type": "deletable",
+            "source": "entities-contact",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-rel-fallback",
+            "type": "deletable",
+            "source": "relationships-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

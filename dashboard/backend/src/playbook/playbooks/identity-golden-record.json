@@ -1,0 +1,259 @@
+{
+  "id": "identity-golden-record",
+  "name": "Identity golden record",
+  "description": "Map external system rows to a canonical golden party — cross-silo identity for AI and integration teams.",
+  "instructions": "1. Install and open Source system, External record, and Golden party types.\n2. POST ERP-style payloads to the ingest webhook (erp_cust_id, company, email) — field mapper normalizes to canonical fields.\n3. Rows link external records to golden parties via same_as when golden_party_id is supplied.\n4. Demonstrates two-source alignment before agents query a single party id.\n\nExample payload:\n{ \"records\": [{ \"source_system_code\": \"erp_north\", \"external_id\": \"ERP-8842\", \"company\": \"Northwind Traders\", \"email\": \"billing@northwind.example\", \"golden_party_id\": \"GP-10042\" }] }\n\n**MCP (playbook id: `identity-golden-record`):** health_check → anythinggraph://schema-summary or get_entity → create_entity_row / create_row_relationship. Bulk ingest via workflow webhook after install.",
+  "entities": [
+    {
+      "name": "id_source_system",
+      "display_name": "Source system",
+      "fields": [
+        {
+          "field_name": "source_system_code",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Short code for the source system",
+          "example": "erp_north"
+        },
+        {
+          "field_name": "source_system_name",
+          "field_type": "TEXT",
+          "description": "Human-readable system name",
+          "example": "North ERP"
+        }
+      ]
+    },
+    {
+      "name": "id_golden_party",
+      "display_name": "Golden party",
+      "fields": [
+        {
+          "field_name": "golden_party_id",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Canonical party identifier",
+          "example": "GP-10042"
+        },
+        {
+          "field_name": "legal_name",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Canonical legal name",
+          "example": "Northwind Traders Ltd"
+        },
+        {
+          "field_name": "primary_email",
+          "field_type": "TEXT",
+          "description": "Primary contact email",
+          "example": "billing@northwind.example"
+        }
+      ]
+    },
+    {
+      "name": "id_external_record",
+      "display_name": "External record",
+      "fields": [
+        {
+          "field_name": "external_id",
+          "field_type": "TEXT",
+          "is_required": true,
+          "is_identifier": true,
+          "description": "Identifier in the source system",
+          "example": "ERP-8842"
+        },
+        {
+          "field_name": "source_system_code",
+          "field_type": "TEXT",
+          "is_required": true,
+          "description": "Source system code for linking",
+          "example": "erp_north"
+        },
+        {
+          "field_name": "company",
+          "field_type": "TEXT",
+          "description": "Company name from source",
+          "example": "Northwind Traders"
+        },
+        {
+          "field_name": "email",
+          "field_type": "TEXT",
+          "description": "Email from source",
+          "example": "billing@northwind.example"
+        },
+        {
+          "field_name": "golden_party_id",
+          "field_type": "TEXT",
+          "description": "Golden party id for same_as link",
+          "example": "GP-10042"
+        }
+      ]
+    }
+  ],
+  "entity_relationships": [
+    {
+      "ref": "id_external_sourced_from",
+      "relationship_name": "sourced_from",
+      "subject_entity_name": "id_external_record",
+      "object_entity_name": "id_source_system"
+    },
+    {
+      "ref": "id_external_same_as",
+      "relationship_name": "same_as",
+      "subject_entity_name": "id_external_record",
+      "object_entity_name": "id_golden_party"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "External record alignment",
+      "description": "Map ERP fields, persist external rows, link source system and golden party.",
+      "graph": {
+        "nodes": [
+          {
+            "id": "trigger-1",
+            "type": "trigger",
+            "position": { "x": 80, "y": 200 },
+            "data": { "label": "Trigger", "triggerType": "webhook" }
+          },
+          {
+            "id": "mapper-1",
+            "type": "field_mapper",
+            "position": { "x": 280, "y": 200 },
+            "data": {
+              "label": "Source field map",
+              "entityRef": "id_external_record",
+              "mappings": [
+                { "sourceField": "erp_cust_id", "targetField": "external_id", "targetMode": "custom" },
+                { "sourceField": "erp_system", "targetField": "source_system_code", "targetMode": "custom" }
+              ]
+            }
+          },
+          {
+            "id": "validate-1",
+            "type": "validate",
+            "position": { "x": 480, "y": 200 },
+            "data": {
+              "label": "Validate",
+              "rules": [
+                { "jsonField": "external_id", "format": "required" },
+                { "jsonField": "source_system_code", "format": "required" }
+              ]
+            }
+          },
+          {
+            "id": "entities-external",
+            "type": "entities",
+            "position": { "x": 680, "y": 200 },
+            "data": {
+              "label": "External records",
+              "entityRef": "id_external_record",
+              "minMatchScore": 2
+            }
+          },
+          {
+            "id": "relationships-source",
+            "type": "relationships",
+            "position": { "x": 900, "y": 140 },
+            "data": {
+              "label": "Sourced from",
+              "entityRelationshipRef": "id_external_sourced_from",
+              "payloadLinkField": "source_system_code",
+              "objectEntityField": "source_system_code"
+            }
+          },
+          {
+            "id": "relationships-golden",
+            "type": "relationships",
+            "position": { "x": 900, "y": 280 },
+            "data": {
+              "label": "Same as golden",
+              "entityRelationshipRef": "id_external_same_as",
+              "payloadLinkField": "golden_party_id",
+              "objectEntityField": "golden_party_id"
+            }
+          },
+          {
+            "id": "fallback-1",
+            "type": "fallback",
+            "position": { "x": 1140, "y": 200 },
+            "data": { "label": "Fallback", "action": "landing_zone" }
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge-trigger-mapper",
+            "type": "deletable",
+            "source": "trigger-1",
+            "target": "mapper-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-mapper-validate",
+            "type": "deletable",
+            "source": "mapper-1",
+            "target": "validate-1",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-validate-entities",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "entities-external",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-entities-source",
+            "type": "deletable",
+            "source": "entities-external",
+            "target": "relationships-source",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-source-golden",
+            "type": "deletable",
+            "source": "relationships-source",
+            "target": "relationships-golden",
+            "sourceHandle": "success"
+          },
+          {
+            "id": "edge-mapper-fallback",
+            "type": "deletable",
+            "source": "mapper-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-validate-fallback",
+            "type": "deletable",
+            "source": "validate-1",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-entities-fallback",
+            "type": "deletable",
+            "source": "entities-external",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-source-fallback",
+            "type": "deletable",
+            "source": "relationships-source",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          },
+          {
+            "id": "edge-golden-fallback",
+            "type": "deletable",
+            "source": "relationships-golden",
+            "target": "fallback-1",
+            "sourceHandle": "failure"
+          }
+        ]
+      }
+    }
+  ]
+}

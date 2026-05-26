@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
   IconButton,
@@ -78,6 +78,7 @@ export function EntityRowDataTable({
   onUpdateRow,
   onDeleteRow,
 }: EntityRowDataTableProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const activeFields = useMemo(
     () => entity.fields.filter((field) => field.is_active !== false),
@@ -237,7 +238,11 @@ export function EntityRowDataTable({
                         <IconButton
                           size="small"
                           disabled={saving || editingRowId !== null}
-                          onClick={() => navigate(`/entities/${entity.id}/rows/${row.id}`)}
+                          onClick={() =>
+                            navigate(`/entities/${entity.id}/rows/${row.id}`, {
+                              state: location.state,
+                            })
+                          }
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
