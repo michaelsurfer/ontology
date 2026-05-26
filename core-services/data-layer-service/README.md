@@ -64,6 +64,7 @@ Example response:
   Body (JSON):
   - **`"entity_ids": "*"`** — export all entities, rows, and relationships in LMDB
   - **`"entity_ids": [1, 2, ...]`** — export those entities **plus every entity linked to them through stored relationships** (e.g. request only `company` → also includes `employee` and all `employed_by` / similar links), with OWL classes, row data, and row-to-row relationship triples
+  - **`"role_id": "viewer"`** — optional OSS role used to filter exported field schema and row values. Fields with an assigned `read_role` on the entity schema are only included when the export role matches. Fields without an assigned role fall back to bundled YAML field policies. Defaults to `viewer` when omitted.
 
 ```bash
 # Full graph
@@ -80,6 +81,11 @@ curl -s -X POST http://127.0.0.1:8182/rdf/turtle \
 curl -s -X POST http://127.0.0.1:8182/rdf/turtle \
   -H 'Content-Type: application/json' \
   -d '{"entity_names":["corporation"]}'
+
+# Filter exported field data by OSS role
+curl -s -X POST http://127.0.0.1:8182/rdf/turtle \
+  -H 'Content-Type: application/json' \
+  -d '{"entity_ids":[7],"role_id":"analyst"}'
 ```
 
 Use the URL **without** a trailing slash (`/rdf/turtle`, not `/rdf/turtle/`).

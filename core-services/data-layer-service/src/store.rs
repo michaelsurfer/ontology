@@ -84,7 +84,7 @@ impl DataStore {
     // Create a new entity definition with auto-increment id and validated fields.
     pub fn create_entity(&self, request: CreateEntityRequest) -> Result<EntityDefinition, StoreError> {
         let normalized_name = normalize_entity_name(&request.name)?;
-        let normalized_fields = normalize_field_requests(&request.fields)?;
+        let normalized_fields = normalize_field_requests(&request.fields, None)?;
         let display_name = normalize_display_name(request.display_name.as_deref(), &normalized_name);
 
         let mut write_transaction = self.begin_write_transaction()?;
@@ -151,7 +151,8 @@ impl DataStore {
         }
 
         if let Some(field_requests) = request.fields {
-            let normalized_fields = normalize_field_requests(&field_requests)?;
+            let normalized_fields =
+                normalize_field_requests(&field_requests, Some(&entity_definition.fields))?;
             let mut counters = self.read_counters(&write_transaction)?;
             entity_definition.fields = build_field_definitions(&mut counters, normalized_fields);
             self.write_counters(&mut write_transaction, &counters)?;
@@ -1228,6 +1229,7 @@ fn build_field_definitions(
             example: field.example,
             extraction_hint: field.extraction_hint,
             is_identifier: field.is_identifier,
+            read_role: field.read_role,
         });
     }
     field_definitions
@@ -1241,11 +1243,13 @@ struct NormalizedFieldRequest {
     example: String,
     extraction_hint: String,
     is_identifier: bool,
+    read_role: String,
 }
 
 // Normalize and validate field definitions for entity create/update.
 fn normalize_field_requests(
     field_requests: &[CreateEntityFieldRequest],
+    existing_fields: Option<&[EntityFieldDefinition]>,
 ) -> Result<Vec<NormalizedFieldRequest>, StoreError> {
     if field_requests.is_empty() {
         return Err(StoreError::BadRequest(
@@ -1270,6 +1274,16 @@ fn normalize_field_requests(
             identifier_field_count += 1;
         }
 
+        let read_role = resolve_read_role_for_field_update(
+            field_request.read_role.as_deref(),
+            existing_fields.and_then(|fields| {
+                fields
+                    .iter()
+                    .find(|field| field.field_name == field_name)
+                    .map(|field| field.read_role.as_str())
+            }),
+        )?;
+
         normalized_fields.push(NormalizedFieldRequest {
             field_name,
             field_type: normalize_field_type(&field_request.field_type)?,
@@ -1278,6 +1292,7 @@ fn normalize_field_requests(
             example: normalize_optional_text(field_request.example.as_deref()),
             extraction_hint: normalize_optional_text(field_request.extraction_hint.as_deref()),
             is_identifier,
+            read_role,
         });
     }
 
@@ -1293,6 +1308,22 @@ fn normalize_field_requests(
 // Trim optional metadata strings from API requests.
 fn normalize_optional_text(raw_value: Option<&str>) -> String {
     raw_value.unwrap_or("").trim().to_string()
+}
+
+// Normalize role id on a field. Empty means all OSS roles may read the field.
+fn normalize_read_role(raw_role: Option<&str>) -> Result<String, StoreError> {
+    Ok(raw_role.unwrap_or("").trim().to_string())
+}
+
+// Resolve read_role for create/update. Explicit request values win; omitted values keep existing.
+fn resolve_read_role_for_field_update(
+    requested_read_role: Option<&str>,
+    existing_read_role: Option<&str>,
+) -> Result<String, StoreError> {
+    match requested_read_role {
+        Some(raw_role) => normalize_read_role(Some(raw_role)),
+        None => Ok(existing_read_role.unwrap_or("").to_string()),
+    }
 }
 
 // Normalize row values against active entity fields.

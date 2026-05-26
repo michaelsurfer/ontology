@@ -13,6 +13,14 @@ type EntityFieldsMetadataTableProps = {
   fields: EntityFieldDefinition[];
 };
 
+// Format read_role for display in the metadata table.
+function formatReadRoleLabel(readRole: string | undefined): string {
+  if (!readRole || readRole.trim().length === 0) {
+    return 'All roles';
+  }
+  return readRole;
+}
+
 // Read-only table of entity fields including AI extraction metadata.
 export function EntityFieldsMetadataTable({ fields }: EntityFieldsMetadataTableProps) {
   const activeFields = fields.filter((field) => field.is_active !== false);
@@ -32,6 +40,7 @@ export function EntityFieldsMetadataTable({ fields }: EntityFieldsMetadataTableP
           <TableCell>Field</TableCell>
           <TableCell>Type</TableCell>
           <TableCell>Flags</TableCell>
+          <TableCell>Visible to role</TableCell>
           <TableCell>Description</TableCell>
           <TableCell>Example</TableCell>
           <TableCell>Extraction hint</TableCell>
@@ -50,6 +59,7 @@ export function EntityFieldsMetadataTable({ fields }: EntityFieldsMetadataTableP
                 <Chip label="Identifier" size="small" color="primary" sx={{ mr: 0.5, mb: 0.5 }} />
               ) : null}
             </TableCell>
+            <TableCell sx={{ maxWidth: 160 }}>{formatReadRoleLabel(field.read_role)}</TableCell>
             <TableCell sx={{ maxWidth: 200 }}>{field.description || '—'}</TableCell>
             <TableCell sx={{ maxWidth: 160 }}>{field.example || '—'}</TableCell>
             <TableCell sx={{ maxWidth: 220 }}>{field.extraction_hint || '—'}</TableCell>

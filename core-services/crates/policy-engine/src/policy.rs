@@ -44,6 +44,22 @@ pub fn role_can_read_field(
     field_rule.read.iter().any(|allowed_role| allowed_role == role_id)
 }
 
+/// Decide whether a role may read a field, using entity-level read_role when set.
+/// Entity field read_role overrides YAML field_policies when non-empty.
+pub fn role_can_read_field_with_entity_override(
+    field_policies: &FieldPolicies,
+    entity_field_read_role: &str,
+    role_id: &str,
+    entity_name: &str,
+    field_name: &str,
+) -> bool {
+    if !entity_field_read_role.trim().is_empty() {
+        return entity_field_read_role == role_id;
+    }
+
+    role_can_read_field(field_policies, role_id, entity_name, field_name)
+}
+
 /// Filter a flat map of field name → value, keeping only fields the role may read.
 /// Returns a new map with forbidden fields removed.
 pub fn filter_fields_for_role(
@@ -56,6 +72,32 @@ pub fn filter_fields_for_role(
         .into_iter()
         .filter(|(field_name, _value)| {
             role_can_read_field(field_policies, role_id, entity_name, field_name)
+        })
+        .collect()
+}
+
+/// Filter row values using entity field read_role overrides and YAML field policies.
+pub fn filter_row_values_for_role(
+    field_policies: &FieldPolicies,
+    entity_name: &str,
+    entity_field_read_role_by_name: &HashMap<String, String>,
+    role_id: &str,
+    row_values: HashMap<String, serde_json::Value>,
+) -> HashMap<String, serde_json::Value> {
+    row_values
+        .into_iter()
+        .filter(|(field_name, _value)| {
+            let entity_field_read_role = entity_field_read_role_by_name
+                .get(field_name)
+                .map(String::as_str)
+                .unwrap_or("");
+            role_can_read_field_with_entity_override(
+                field_policies,
+                entity_field_read_role,
+                role_id,
+                entity_name,
+                field_name,
+            )
         })
         .collect()
 }

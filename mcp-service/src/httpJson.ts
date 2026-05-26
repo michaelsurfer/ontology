@@ -42,7 +42,7 @@ export async function requestJson<T>(
 // Perform a Turtle export request and return plain text.
 export async function requestTurtle(
   baseUrl: string,
-  body: { entity_ids?: '*' | number[]; entity_names?: string[] },
+  body: { entity_ids?: '*' | number[]; entity_names?: string[]; role_id?: string },
 ): Promise<string> {
   const response = await fetch(`${baseUrl}/rdf/turtle`, {
     method: 'POST',

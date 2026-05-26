@@ -3,6 +3,7 @@ import type {
   EntityRelationshipDefinition,
   EntityRowRecord,
   EntitySummary,
+  PolicyRolesResponse,
   RelationshipRecord,
   TurtleExportRequest,
 } from './types.js';
@@ -98,6 +99,7 @@ export const dataLayerClient = {
       example?: string;
       extraction_hint?: string;
       is_identifier?: boolean;
+      read_role?: string;
     }>;
   }) => requestJson<EntityDefinition>('POST', '/entities', body),
 
@@ -114,6 +116,7 @@ export const dataLayerClient = {
         example?: string;
         extraction_hint?: string;
         is_identifier?: boolean;
+        read_role?: string;
       }>;
     },
   ) => requestJson<EntityDefinition>('PUT', `/entities/${entityId}`, body),
@@ -184,4 +187,6 @@ export const dataLayerClient = {
     requestJson<{ ok: boolean }>('DELETE', `/relationships/${relationshipId}`),
 
   exportTurtle: (body: TurtleExportRequest) => requestTurtle(body),
+
+  listPolicyRoles: () => requestJson<PolicyRolesResponse>('GET', '/policy/roles'),
 };

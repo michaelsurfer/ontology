@@ -22,7 +22,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { ontologyApi } from '../api/client';
-import type { EntityDefinition, EntityFieldInput, FieldType } from '../types';
+import { FieldReadRoleSelect } from './FieldReadRoleSelect';
+import type { EntityDefinition, EntityFieldInput, FieldType, PolicyRoleDefinition } from '../types';
 
 export type EntityFieldFormRow = {
   field_name: string;
@@ -32,6 +33,7 @@ export type EntityFieldFormRow = {
   example: string;
   extraction_hint: string;
   is_identifier: boolean;
+  read_role: string;
 };
 
 const emptyFieldRow: EntityFieldFormRow = {
@@ -42,6 +44,7 @@ const emptyFieldRow: EntityFieldFormRow = {
   example: '',
   extraction_hint: '',
   is_identifier: false,
+  read_role: '',
 };
 
 type EntityStructureDialogProps = {
@@ -84,6 +87,7 @@ function fieldRowToApiInput(row: EntityFieldFormRow): EntityFieldInput {
     example: row.example.trim() || undefined,
     extraction_hint: row.extraction_hint.trim() || undefined,
     is_identifier: row.is_identifier,
+    read_role: row.read_role.trim(),
   };
 }
 
@@ -101,6 +105,7 @@ export function EntityStructureDialog({
   const [displayName, setDisplayName] = useState('');
   const [fieldRows, setFieldRows] = useState<EntityFieldFormRow[]>([{ ...emptyFieldRow }]);
   const [expandedMetadataIndices, setExpandedMetadataIndices] = useState<Set<number>>(new Set());
+  const [availableRoles, setAvailableRoles] = useState<PolicyRoleDefinition[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -109,6 +114,16 @@ export function EntityStructureDialog({
     if (!open) {
       return;
     }
+
+    void ontologyApi
+      .listPolicyRoles()
+      .then((response) => {
+        setAvailableRoles(response.data.roles || []);
+      })
+      .catch(() => {
+        setAvailableRoles([]);
+      });
+
     if (mode === 'edit' && initialEntity) {
       setEntityName(initialEntity.name);
       setDisplayName(initialEntity.display_name || initialEntity.name);
@@ -122,6 +137,7 @@ export function EntityStructureDialog({
               example: field.example || '',
               extraction_hint: field.extraction_hint || '',
               is_identifier: Boolean(field.is_identifier),
+              read_role: field.read_role || '',
             }))
           : [{ ...emptyFieldRow }];
       setFieldRows(loadedFieldRows);
@@ -277,12 +293,14 @@ export function EntityStructureDialog({
           {mode === 'edit' ? (
             <Alert severity="info">
               Saving fields replaces the full field list. Existing rows keep values by field name
-              where names still match. Metadata helps AI agents extract and map data accurately.
+              where names still match. Use &quot;Visible to role&quot; to restrict a field to one OSS role;
+              choose &quot;All roles&quot; to allow every role.
             </Alert>
           ) : (
             <Alert severity="info">
               Expand &quot;AI metadata&quot; on each field to add descriptions, examples, and
-              extraction hints. Mark one field as the identifier (e.g. name or code).
+              extraction hints. Mark one field as the identifier (e.g. name or code). Choose
+              &quot;Visible to role&quot; to limit a field to a single OSS role.
             </Alert>
           )}
 
@@ -311,8 +329,8 @@ export function EntityStructureDialog({
 
             return (
               <Card key={index} variant="outlined">
-                <CardContent>
-                  <Stack spacing={1.5}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Stack spacing={1}>
                     <Box
                       sx={{
                         display: 'flex',
@@ -376,6 +394,12 @@ export function EntityStructureDialog({
                       >
                         <DeleteIcon />
                       </IconButton>
+                      <FieldReadRoleSelect
+                        availableRoles={availableRoles}
+                        selectedRoleId={fieldRow.read_role}
+                        onChange={(nextRoleId) => updateFieldRow(index, { read_role: nextRoleId })}
+                        disabled={saving || availableRoles.length === 0}
+                      />
                     </Box>
 
                     <Button

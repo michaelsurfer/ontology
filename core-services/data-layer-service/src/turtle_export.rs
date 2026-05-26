@@ -1,7 +1,9 @@
 use crate::models::{
-    EntityDefinition, EntityRelationshipDefinition, TurtleEntityIdsPayload, TurtleExportRequest,
+    EntityDefinition, EntityFieldDefinition, EntityRelationshipDefinition, TurtleEntityIdsPayload,
+    TurtleExportRequest,
 };
 use crate::store::{DataStore, StoreError};
+use policy_engine::{role_can_read_field_with_entity_override, OssPolicyConfig};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -10,7 +12,12 @@ const DEFAULT_BASE_IRI: &str = "http://example.com/context#";
 const DEFAULT_RESOURCE_IRI_PREFIX: &str = "http://example.com/resource/";
 
 // Build Turtle describing scoped entities (schema), instance rows, and relationship links.
-pub fn turtle_from_lmdb(store: &DataStore, export_request: &TurtleExportRequest) -> Result<String, StoreError> {
+pub fn turtle_from_lmdb(
+    store: &DataStore,
+    policy_config: &OssPolicyConfig,
+    role_id: &str,
+    export_request: &TurtleExportRequest,
+) -> Result<String, StoreError> {
     let base_iri = read_base_iri();
     let resource_prefix = read_resource_prefix();
 
@@ -38,6 +45,7 @@ pub fn turtle_from_lmdb(store: &DataStore, export_request: &TurtleExportRequest)
     let mut lines: Vec<String> = Vec::new();
     append_export_summary_comment(
         &mut lines,
+        role_id,
         &entity_by_id,
         &seed_entity_ids_for_summary,
         &scoped_entity_ids,
@@ -63,7 +71,13 @@ pub fn turtle_from_lmdb(store: &DataStore, export_request: &TurtleExportRequest)
     }
     scoped_entity_map.sort_by(|left, right| left.0.cmp(&right.0));
 
-    append_ontology_for_entities(&mut lines, &scoped_entity_map, &base_iri);
+    append_ontology_for_entities(
+        &mut lines,
+        &scoped_entity_map,
+        policy_config,
+        role_id,
+        &base_iri,
+    );
     append_ontology_for_entity_relationships(
         &mut lines,
         &scoped_entity_relationships,
@@ -76,6 +90,8 @@ pub fn turtle_from_lmdb(store: &DataStore, export_request: &TurtleExportRequest)
         store,
         &mut lines,
         &scoped_entity_map,
+        policy_config,
+        role_id,
         &base_iri,
         &resource_prefix,
     );
@@ -227,9 +243,26 @@ fn append_ontology_for_entity_relationships(
     }
 }
 
+// Decide whether the active role may read an entity field (entity read_role overrides YAML).
+fn role_can_read_entity_field(
+    policy_config: &OssPolicyConfig,
+    role_id: &str,
+    entity_definition: &EntityDefinition,
+    field: &EntityFieldDefinition,
+) -> bool {
+    role_can_read_field_with_entity_override(
+        &policy_config.field_policies,
+        &field.read_role,
+        role_id,
+        &entity_definition.name,
+        &field.field_name,
+    )
+}
+
 // Document which seeds were requested and what was included after relationship expansion.
 fn append_export_summary_comment(
     lines: &mut Vec<String>,
+    role_id: &str,
     entity_by_id: &HashMap<u64, EntityDefinition>,
     seed_entity_ids: &[u64],
     scoped_entity_ids: &HashSet<u64>,
@@ -252,7 +285,7 @@ fn append_export_summary_comment(
     scoped_labels.sort();
 
     lines.push(format!(
-        "# RDF export — seeds: [{}]; expanded entities: [{}]; entity_relationships: {}; row_links: {}",
+        "# RDF export — role_id: {role_id}; seeds: [{}]; expanded entities: [{}]; entity_relationships: {}; row_links: {}",
         seed_labels.join(", "),
         scoped_labels.join(", "),
         scoped_entity_relationships.len(),
@@ -296,6 +329,8 @@ fn read_resource_prefix() -> String {
 fn append_ontology_for_entities(
     lines: &mut Vec<String>,
     scoped_entities: &[(u64, EntityDefinition)],
+    policy_config: &OssPolicyConfig,
+    role_id: &str,
     base_iri: &str,
 ) {
     for (_entity_id, entity_definition) in scoped_entities {
@@ -310,6 +345,9 @@ fn append_ontology_for_entities(
 
         for field in &entity_definition.fields {
             if !field.is_active {
+                continue;
+            }
+            if !role_can_read_entity_field(policy_config, role_id, entity_definition, field) {
                 continue;
             }
             let property_iri = format!("{}{}", base_iri, to_camel_case(&field.field_name));
@@ -327,6 +365,8 @@ fn append_instance_data_for_entities(
     store: &DataStore,
     lines: &mut Vec<String>,
     scoped_entities: &[(u64, EntityDefinition)],
+    policy_config: &OssPolicyConfig,
+    role_id: &str,
     base_iri: &str,
     resource_prefix: &str,
 ) {
@@ -350,6 +390,9 @@ fn append_instance_data_for_entities(
             };
             for field in &entity_definition.fields {
                 if !field.is_active {
+                    continue;
+                }
+                if !role_can_read_entity_field(policy_config, role_id, entity_definition, field) {
                     continue;
                 }
 

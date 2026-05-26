@@ -5,7 +5,7 @@ mod turtle_export;
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::Response,
     routing::{get, post, put},
     Json, Router,
@@ -15,8 +15,10 @@ use models::{
     CreateRelationshipRequest, TurtleExportRequest, UpdateEntityRelationshipRequest,
     UpdateEntityRequest, UpdateEntityRowRequest, UpdateRelationshipRequest,
 };
-use policy_engine::OssPolicyConfig;
+use policy_engine::{filter_row_values_for_role, OssPolicyConfig};
 use serde::Serialize;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -174,6 +176,8 @@ async fn create_entity_handler(
     State(state): State<AppState>,
     Json(payload): Json<CreateEntityRequest>,
 ) -> Result<Json<models::EntityDefinition>, (StatusCode, Json<ErrorBody>)> {
+    validate_entity_field_read_roles(&state.policy_config, &payload.fields)
+        .map_err(map_store_error)?;
     state
         .store
         .create_entity(payload)
@@ -188,6 +192,10 @@ async fn update_entity_handler(
     Json(payload): Json<UpdateEntityRequest>,
 ) -> Result<Json<models::EntityDefinition>, (StatusCode, Json<ErrorBody>)> {
     let entity_id = parse_id_param(&entity_id_raw, "entity_id")?;
+    if let Some(field_requests) = &payload.fields {
+        validate_entity_field_read_roles(&state.policy_config, field_requests)
+            .map_err(map_store_error)?;
+    }
     state
         .store
         .update_entity(entity_id, payload)
@@ -222,14 +230,26 @@ async fn get_entity_handler(
 // GET /entities/:entity_id/data — list rows for an entity.
 async fn list_entity_data_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(entity_id_raw): Path<String>,
 ) -> Result<Json<Vec<models::EntityRowRecord>>, (StatusCode, Json<ErrorBody>)> {
     let entity_id = parse_id_param(&entity_id_raw, "entity_id")?;
-    state
+    let entity_definition = state
+        .store
+        .get_entity(entity_id)
+        .map_err(map_store_error)?;
+    let role_id = read_role_id_from_headers(&headers, &state.policy_config);
+    let row_records = state
         .store
         .list_entity_rows(entity_id)
-        .map(Json)
-        .map_err(map_store_error)
+        .map_err(map_store_error)?;
+    let filtered_rows = row_records
+        .into_iter()
+        .map(|row_record| {
+            filter_row_record_for_role(&state.policy_config, &entity_definition, row_record, &role_id)
+        })
+        .collect();
+    Ok(Json(filtered_rows))
 }
 
 // POST /entities/:entity_id/data — create a row.
@@ -420,7 +440,9 @@ async fn export_rdf_turtle_handler(
     State(state): State<AppState>,
     Json(payload): Json<TurtleExportRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorBody>)> {
-    match turtle_export::turtle_from_lmdb(&state.store, &payload) {
+    let role_id = resolve_role_id_from_export_request(&state.policy_config, payload.role_id.as_deref())
+        .map_err(map_store_error)?;
+    match turtle_export::turtle_from_lmdb(&state.store, &state.policy_config, &role_id, &payload) {
         Ok(turtle_text) => Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "text/turtle; charset=utf-8")
@@ -435,4 +457,94 @@ async fn export_rdf_turtle_handler(
             }),
         Err(store_error) => Err(map_store_error(store_error)),
     }
+}
+
+// Resolve OSS role id from turtle export JSON (defaults to viewer when omitted).
+fn resolve_role_id_from_export_request(
+    policy_config: &OssPolicyConfig,
+    requested_role_id: Option<&str>,
+) -> Result<String, StoreError> {
+    let trimmed_role_id = requested_role_id.unwrap_or("").trim();
+    if trimmed_role_id.is_empty() {
+        return Ok("viewer".to_string());
+    }
+
+    if policy_config.is_valid_role(trimmed_role_id) {
+        Ok(trimmed_role_id.to_string())
+    } else {
+        Err(StoreError::BadRequest(format!(
+            "Unknown role_id '{trimmed_role_id}'"
+        )))
+    }
+}
+
+// Read the active OSS role id from request headers (defaults to viewer).
+fn read_role_id_from_headers(headers: &HeaderMap, policy_config: &OssPolicyConfig) -> String {
+    let requested_role_id = headers
+        .get("X-Ontox-Role-Id")
+        .and_then(|header_value| header_value.to_str().ok())
+        .map(str::trim)
+        .unwrap_or("");
+
+    if requested_role_id.is_empty() {
+        return "viewer".to_string();
+    }
+
+    if policy_config.is_valid_role(requested_role_id) {
+        requested_role_id.to_string()
+    } else {
+        "viewer".to_string()
+    }
+}
+
+// Ensure each field read_role is a known OSS role id when set.
+fn validate_entity_field_read_roles(
+    policy_config: &OssPolicyConfig,
+    field_requests: &[models::CreateEntityFieldRequest],
+) -> Result<(), StoreError> {
+    for field_request in field_requests {
+        if let Some(read_role) = &field_request.read_role {
+            let trimmed_role_id = read_role.trim();
+            if trimmed_role_id.is_empty() {
+                continue;
+            }
+            if !policy_config.is_valid_role(trimmed_role_id) {
+                return Err(StoreError::BadRequest(format!(
+                    "Unknown role '{trimmed_role_id}' on field '{}'",
+                    field_request.field_name
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Remove row field values that the active role is not allowed to read.
+fn filter_row_record_for_role(
+    policy_config: &OssPolicyConfig,
+    entity_definition: &models::EntityDefinition,
+    mut row_record: models::EntityRowRecord,
+    role_id: &str,
+) -> models::EntityRowRecord {
+    let field_read_role_by_name: HashMap<String, String> = entity_definition
+        .fields
+        .iter()
+        .map(|field| (field.field_name.clone(), field.read_role.clone()))
+        .collect();
+
+    let Value::Object(value_map) = &row_record.values else {
+        return row_record;
+    };
+
+    let filtered_values = filter_row_values_for_role(
+        &policy_config.field_policies,
+        &entity_definition.name,
+        &field_read_role_by_name,
+        role_id,
+        value_map.iter().map(|(key, value)| (key.clone(), value.clone())).collect(),
+    );
+
+    row_record.values = Value::Object(filtered_values.into_iter().collect());
+    row_record
 }

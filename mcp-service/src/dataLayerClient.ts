@@ -54,6 +54,7 @@ export type RelationshipRecord = {
 export type TurtleExportRequest = {
   entity_ids?: '*' | number[];
   entity_names?: string[];
+  role_id?: string;
 };
 
 export type CreateEntityBody = {

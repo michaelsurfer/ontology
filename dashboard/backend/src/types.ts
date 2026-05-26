@@ -10,6 +10,7 @@ export interface EntityFieldDefinition {
   example: string;
   extraction_hint: string;
   is_identifier: boolean;
+  read_role?: string;
 }
 
 export interface EntityDefinition {
@@ -53,6 +54,7 @@ export interface RelationshipRecord {
 export interface TurtleExportRequest {
   entity_ids?: '*' | number[];
   entity_names?: string[];
+  role_id?: string;
 }
 
 export interface GraphNode {
@@ -72,4 +74,16 @@ export interface GraphEdge {
 export interface GraphViewModel {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface PolicyRoleDefinition {
+  id: string;
+  display_name: string;
+  description: string;
+}
+
+export interface PolicyRolesResponse {
+  ok: boolean;
+  edition: string;
+  roles: PolicyRoleDefinition[];
 }

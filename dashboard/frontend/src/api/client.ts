@@ -6,6 +6,7 @@ import type {
   EntityRowRecord,
   EntitySummary,
   GraphViewModel,
+  PolicyRolesResponse,
   RelationshipRecord,
 } from '../types';
 import type {
@@ -47,6 +48,8 @@ export function readApiErrorMessage(error: unknown): string {
 
 export const ontologyApi = {
   health: () => apiClient.get('/health'),
+
+  listPolicyRoles: () => apiClient.get<PolicyRolesResponse>('/policy/roles'),
 
   listEntities: () => apiClient.get<EntitySummary[]>('/entities'),
 
@@ -123,10 +126,10 @@ export const ontologyApi = {
 
   deleteRelationship: (relationshipId: number) => apiClient.delete(`/relationships/${relationshipId}`),
 
-  fetchRdfGraph: (body: { entity_ids?: '*' | number[]; entity_names?: string[] }) =>
+  fetchRdfGraph: (body: { entity_ids?: '*' | number[]; entity_names?: string[]; role_id?: string }) =>
     apiClient.post<GraphViewModel>('/rdf/graph', body),
 
-  fetchTurtle: (body: { entity_ids?: '*' | number[]; entity_names?: string[] }) =>
+  fetchTurtle: (body: { entity_ids?: '*' | number[]; entity_names?: string[]; role_id?: string }) =>
     apiClient.post<string>('/rdf/turtle', body, { responseType: 'text' }),
 
   fetchRdfCacheMeta: () =>
@@ -138,7 +141,7 @@ export const ontologyApi = {
       updated_at_ms: number;
     }>('/rdf/cache-meta'),
 
-  syncRdfCache: (body: { entity_ids?: '*' | number[]; entity_names?: string[] } = { entity_ids: '*' }) =>
+  syncRdfCache: (body: { entity_ids?: '*' | number[]; entity_names?: string[]; role_id?: string } = { entity_ids: '*' }) =>
     apiClient.post<{
       ok: boolean;
       dataLayerUrl: string;

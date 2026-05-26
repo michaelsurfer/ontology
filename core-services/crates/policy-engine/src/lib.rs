@@ -15,7 +15,10 @@ pub mod role;
 
 // Re-export the most commonly used items at the crate root for convenience.
 pub use loader::{OssPolicyConfig, PolicyError};
-pub use policy::{filter_fields_for_role, role_can_read_field, FieldPolicies};
+pub use policy::{
+    filter_fields_for_role, filter_row_values_for_role, role_can_read_field,
+    role_can_read_field_with_entity_override, FieldPolicies,
+};
 pub use role::{RoleDefinition, OSS_ROLE_IDS};
 
 #[cfg(test)]
@@ -71,6 +74,21 @@ field_policies:
         let config = OssPolicyConfig::load().unwrap();
         assert_eq!(config.roles.len(), 4);
         assert!(config.is_valid_role("admin"));
+    }
+
+    // Entity field read_role override YAML when set.
+    #[test]
+    fn test_entity_field_read_role_override_yaml() {
+        let config = OssPolicyConfig::load_from_yaml_str(SAMPLE_YAML).unwrap();
+        let policies = &config.field_policies;
+
+        assert!(!role_can_read_field_with_entity_override(
+            policies, "viewer", "analyst", "employee", "salary"
+        ));
+
+        assert!(role_can_read_field_with_entity_override(
+            policies, "viewer", "viewer", "employee", "salary"
+        ));
     }
 
     // analyst and admin may read salary; viewer and editor may not.

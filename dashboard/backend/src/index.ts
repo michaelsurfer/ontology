@@ -262,6 +262,15 @@ function startDashboardServer() {
     }
   });
 
+  application.get('/api/policy/roles', async (_request, response) => {
+    try {
+      const policyRoles = await dataLayerClient.listPolicyRoles();
+      response.json(policyRoles);
+    } catch (error) {
+      response.status(502).json({ error: formatError(error) });
+    }
+  });
+
   const port = Number(process.env.DASHBOARD_API_PORT || defaultPort);
   application.listen(port, () => {
     console.log(`Dashboard API listening on http://127.0.0.1:${port}`);
