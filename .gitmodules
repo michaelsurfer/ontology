@@ -1,0 +1,12 @@
+[submodule "core-services"]
+	path = core-services
+	url = https://github.com/anythingGraph/anythingGraph-core.git
+[submodule "dashboard"]
+	path = dashboard
+	url = https://github.com/anythingGraph/anythingGraph-dashboard.git
+[submodule "mcp-service"]
+	path = mcp-service
+	url = https://github.com/anythingGraph/anythingGraph-mcp-service.git
+[submodule "website"]
+	path = website
+	url = https://github.com/anythingGraph/website.git

@@ -69,6 +69,22 @@ Each playbook includes record types, schema relationships, an ingest workflow, a
 
 The **context map** (schema graph) is served from the Node API (`GET /api/graph/schema`) and does **not** require Rust. **SPARQL / Query Studio** expects the Rust service to be running.
 
+## Repository layout (submodules)
+
+`core-services/`, `dashboard/`, `mcp-service/`, and `website/` are **git submodules** with their own GitHub repositories. Clone the monorepo with submodules:
+
+```bash
+git clone --recurse-submodules <monorepo-url>
+```
+
+If you already cloned without submodules, run:
+
+```bash
+git submodule update --init --recursive
+```
+
+See [SUBMODULES.md](SUBMODULES.md) for updating submodules and working across repos.
+
 ## Run locally
 
 ### 1. Backend (required)
