@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AnythingGraph — a fair use licensed layer for AI assistants: governed data access, connected business records, and easy integration. Free for non-commercial use."
+    />
+    <title>AnythingGraph — Governed data for AI assistants</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #faf8f5;
+        --bg-warm: #fff7ed;
+        --surface: #ffffff;
+        --ink: #1a1625;
+        --ink-soft: #5c5470;
+        --border: rgba(26, 22, 37, 0.08);
+        --coral: #ff6b4a;
+        --coral-soft: #ffe8e2;
+        --sun: #ffc947;
+        --sun-soft: #fff4d6;
+        --sky: #4dabf7;
+        --sky-soft: #e7f5ff;
+        --grape: #9775fa;
+        --grape-soft: #f3f0ff;
+        --mint: #51cf66;
+        --mint-soft: #ebfbee;
+        --radius: 20px;
+        --radius-lg: 28px;
+        --max-width: 1140px;
+        --shadow: 0 20px 50px rgba(26, 22, 37, 0.08);
+        --shadow-hover: 0 28px 60px rgba(26, 22, 37, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family: "Outfit", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        line-height: 1.55;
+        overflow-x: hidden;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(60px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .blob-a {
+        width: 420px;
+        height: 420px;
+        background: rgba(255, 201, 71, 0.35);
+        top: -120px;
+        right: -80px;
+        animation: float-a 9s ease-in-out infinite;
+      }
+
+      .blob-b {
+        width: 360px;
+        height: 360px;
+        background: rgba(151, 117, 250, 0.28);
+        top: 40%;
+        left: -120px;
+        animation: float-b 11s ease-in-out infinite;
+      }
+
+      .blob-c {
+        width: 300px;
+        height: 300px;
+        background: rgba(77, 171, 247, 0.25);
+        bottom: 10%;
+        right: 5%;
+        animation: float-a 10s ease-in-out infinite reverse;
+      }
+
+      @keyframes float-a {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(-20px, 24px) scale(1.05);
+        }
+      }
+
+      @keyframes float-b {
+        0%,
+        100% {
+          transform: translate(0, 0);
+        }
+        50% {
+          transform: translate(24px, -18px);
+        }
+      }
+
+      @keyframes bounce-in {
+        0% {
+          transform: translateY(12px);
+          opacity: 0;
+        }
+        100% {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      .page-shell {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      .announcement {
+        background: linear-gradient(90deg, var(--grape-soft), var(--sun-soft), var(--sky-soft));
+        border-bottom: 1px solid var(--border);
+        text-align: center;
+        padding: 0.55rem 1rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+
+      .announcement strong {
+        color: var(--ink);
+      }
+
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: rgba(250, 248, 245, 0.85);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        font-weight: 800;
+        font-size: 1.15rem;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-mark {
+        width: 2.35rem;
+        height: 2.35rem;
+        border-radius: 14px;
+        background: linear-gradient(135deg, var(--coral), var(--grape));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 24px rgba(255, 107, 74, 0.35);
+        transform: rotate(-6deg);
+      }
+
+      .brand-mark svg {
+        width: 1.15rem;
+        height: 1.15rem;
+        fill: white;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        flex-wrap: wrap;
+      }
+
+      .nav-links a:not(.button) {
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: color 0.15s ease;
+      }
+
+      .nav-links a:not(.button):hover {
+        color: var(--ink);
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        padding: 0.7rem 1.25rem;
+        border-radius: 999px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        border: 2px solid transparent;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+        cursor: pointer;
+      }
+
+      .button:hover {
+        transform: translateY(-3px) scale(1.02);
+      }
+
+      .button-primary {
+        background: var(--ink);
+        color: white;
+        box-shadow: 0 12px 30px rgba(26, 22, 37, 0.2);
+      }
+
+      .button-coral {
+        background: var(--coral);
+        color: white;
+        box-shadow: 0 12px 30px rgba(255, 107, 74, 0.35);
+      }
+
+      .button-secondary {
+        background: var(--surface);
+        border-color: var(--border);
+        color: var(--ink);
+        box-shadow: var(--shadow);
+      }
+
+      main {
+        flex: 1;
+        position: relative;
+        z-index: 1;
+      }
+
+      .section {
+        width: min(100% - 2rem, var(--max-width));
+        margin: 0 auto;
+        padding: 4rem 0;
+      }
+
+      .section-label {
+        display: inline-block;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--grape);
+        margin-bottom: 0.75rem;
+      }
+
+      .hero {
+        padding-top: 3.5rem;
+        padding-bottom: 2rem;
+        position: relative;
+      }
+
+      .hero-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 2.5rem;
+        animation: bounce-in 0.7s ease both;
+      }
+
+      @media (min-width: 960px) {
+        .hero-inner {
+          flex-direction: row;
+          align-items: center;
+        }
+
+        .hero-copy {
+          flex: 1 1 55%;
+        }
+
+        .hero-play {
+          flex: 1 1 45%;
+        }
+      }
+
+      .hero h1 {
+        font-size: clamp(2.6rem, 7vw, 4.5rem);
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+        font-weight: 800;
+        max-width: 12ch;
+        margin-bottom: 1.25rem;
+      }
+
+      .hero h1 .gradient {
+        background: linear-gradient(120deg, var(--coral), var(--grape), var(--sky));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .hero-lead {
+        font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+        color: var(--ink-soft);
+        max-width: 34rem;
+        margin-bottom: 1.75rem;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+      }
+
+      .hero-play {
+        background: var(--surface);
+        border: 2px dashed rgba(26, 22, 37, 0.12);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        transition: border-color 0.2s ease, transform 0.2s ease;
+      }
+
+      .hero-play:hover {
+        border-color: var(--coral);
+        transform: rotate(-1deg);
+      }
+
+      .play-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin-bottom: 0.35rem;
+      }
+
+      .play-subtitle {
+        color: var(--ink-soft);
+        font-size: 0.92rem;
+        margin-bottom: 1.1rem;
+      }
+
+      .record-picker {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+      }
+
+      .record-chip {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 16px;
+        border: 2px solid var(--border);
+        background: var(--bg);
+        cursor: pointer;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s ease, box-shadow 0.15s ease;
+        text-align: left;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
+        width: 100%;
+      }
+
+      .record-chip:hover {
+        transform: translateX(6px) scale(1.01);
+        box-shadow: var(--shadow);
+      }
+
+      .record-chip.active {
+        border-color: var(--coral);
+        background: var(--coral-soft);
+        transform: translateX(8px) scale(1.02);
+      }
+
+      .record-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
+
+      .record-icon.invoice {
+        background: var(--sun-soft);
+      }
+
+      .record-icon.crm {
+        background: var(--sky-soft);
+      }
+
+      .record-icon.doc {
+        background: var(--grape-soft);
+      }
+
+      .record-chip strong {
+        display: block;
+        font-size: 0.95rem;
+      }
+
+      .record-chip span {
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+      }
+
+      .play-result {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--mint-soft), var(--sky-soft));
+        font-size: 0.92rem;
+        font-weight: 500;
+        min-height: 3.2rem;
+        display: flex;
+        align-items: center;
+      }
+
+      .trust-line {
+        text-align: center;
+        font-size: clamp(1rem, 2.5vw, 1.35rem);
+        font-weight: 700;
+        color: var(--ink-soft);
+        padding: 1rem 0 0;
+      }
+
+      .trust-line em {
+        font-style: normal;
+        color: var(--coral);
+      }
+
+      .section-heading {
+        margin-bottom: 2rem;
+      }
+
+      .section-heading h2 {
+        font-size: clamp(2rem, 4.5vw, 3rem);
+        letter-spacing: -0.03em;
+        font-weight: 800;
+        line-height: 1.08;
+        max-width: 16ch;
+      }
+
+      .section-heading p {
+        color: var(--ink-soft);
+        font-size: 1.05rem;
+        max-width: 38rem;
+        margin-top: 0.85rem;
+      }
+
+      .pillars {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      @media (min-width: 760px) {
+        .pillars {
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+      }
+
+      .pillar-card {
+        flex: 1 1 240px;
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        border: 2px solid transparent;
+        transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+      }
+
+      .pillar-card:hover {
+        transform: translateY(-8px) rotate(-1deg);
+        box-shadow: var(--shadow-hover);
+      }
+
+      .pillar-card.coral {
+        background: var(--coral-soft);
+      }
+
+      .pillar-card.grape {
+        background: var(--grape-soft);
+      }
+
+      .pillar-card.sky {
+        background: var(--sky-soft);
+      }
+
+      .pillar-card.sun {
+        background: var(--sun-soft);
+      }
+
+      .pillar-emoji {
+        font-size: 2rem;
+        line-height: 1;
+      }
+
+      .pillar-card h3 {
+        font-size: 1.15rem;
+        font-weight: 800;
+      }
+
+      .pillar-card p {
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+      }
+
+      .steps-panel {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+      }
+
+      .steps-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+
+      @media (min-width: 760px) {
+        .steps-grid {
+          flex-direction: row;
+        }
+      }
+
+      .step-card {
+        flex: 1;
+        padding: 1.35rem;
+        border-radius: var(--radius);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .step-card:nth-child(1) {
+        background: var(--sun-soft);
+      }
+
+      .step-card:nth-child(2) {
+        background: var(--sky-soft);
+      }
+
+      .step-card:nth-child(3) {
+        background: var(--mint-soft);
+      }
+
+      .step-number {
+        font-size: 3rem;
+        font-weight: 800;
+        line-height: 1;
+        opacity: 0.25;
+        margin-bottom: 0.5rem;
+      }
+
+      .step-card h3 {
+        font-size: 1.05rem;
+        font-weight: 800;
+        margin-bottom: 0.35rem;
+      }
+
+      .step-card p {
+        font-size: 0.92rem;
+        color: var(--ink-soft);
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 1.25rem;
+      }
+
+      .stack-chip {
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        background: var(--bg-warm);
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+
+      .use-case-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      @media (min-width: 760px) {
+        .use-case-grid {
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+      }
+
+      .use-case-card {
+        flex: 1 1 260px;
+        background: var(--surface);
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.4rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .use-case-card:hover {
+        transform: rotate(1deg) translateY(-4px);
+        border-color: var(--grape);
+      }
+
+      .use-case-card h3 {
+        font-size: 1.05rem;
+        font-weight: 800;
+      }
+
+      .use-case-card p {
+        color: var(--ink-soft);
+        font-size: 0.92rem;
+      }
+
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: auto;
+        padding-top: 0.5rem;
+      }
+
+      .tag {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.3rem 0.6rem;
+        border-radius: 999px;
+        background: var(--bg);
+      }
+
+      .cta-banner {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: flex-start;
+        background: linear-gradient(135deg, #1a1625 0%, #3d2f6b 50%, #ff6b4a 100%);
+        color: white;
+        border-radius: var(--radius-lg);
+        padding: 2.5rem;
+        box-shadow: var(--shadow-hover);
+      }
+
+      @media (min-width: 760px) {
+        .cta-banner {
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+        }
+      }
+
+      .cta-banner h2 {
+        font-size: clamp(1.6rem, 3vw, 2.2rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin-bottom: 0.5rem;
+      }
+
+      .cta-banner p {
+        opacity: 0.88;
+        max-width: 36rem;
+        font-size: 1rem;
+      }
+
+      .cta-banner .button-coral {
+        background: white;
+        color: var(--ink);
+        flex-shrink: 0;
+      }
+
+      .marquee-wrap {
+        overflow: hidden;
+        border-block: 1px solid var(--border);
+        background: var(--surface);
+        padding: 1rem 0;
+      }
+
+      .marquee {
+        display: flex;
+        gap: 2.5rem;
+        width: max-content;
+        animation: marquee 28s linear infinite;
+      }
+
+      .marquee-item {
+        font-weight: 700;
+        font-size: 1rem;
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+
+      .marquee-item span {
+        color: var(--coral);
+        margin-right: 0.5rem;
+      }
+
+      @keyframes marquee {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(-50%);
+        }
+      }
+
+      .site-footer {
+        border-top: 1px solid var(--border);
+        padding: 2rem 1.5rem;
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+        background: var(--surface);
+      }
+
+      .footer-inner {
+        width: min(100% - 2rem, var(--max-width));
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      @media (min-width: 760px) {
+        .footer-inner {
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="blob blob-a" aria-hidden="true"></div>
+      <div class="blob blob-b" aria-hidden="true"></div>
+      <div class="blob blob-c" aria-hidden="true"></div>
+
+      <div class="announcement">
+        <strong>Free for non-commercial use</strong> · Fair use license · Built for AI assistants
+      </div>
+
+      <header class="site-header">
+        <a class="brand" href="#top">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="6" cy="12" r="2.5" />
+              <circle cx="18" cy="6" r="2.5" />
+              <circle cx="18" cy="18" r="2.5" />
+              <path d="M8.2 11.2 15.8 7.2M8.2 12.8l7.6 4" stroke="white" stroke-width="1.5" fill="none" />
+            </svg>
+          </span>
+          AnythingGraph
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="#mcp">MCP ready</a>
+          <a href="#integrate">Integrate</a>
+          <a href="#ontology">Connected data</a>
+          <a href="#use-cases">Use cases</a>
+          <a
+            class="button button-primary"
+            href="https://github.com/anythingGraph/AnythingGraph"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub →
+          </a>
+        </nav>
+      </header>
+
+      <main id="top">
+        <section class="section hero">
+          <div class="hero-inner">
+            <div class="hero-copy">
+              <h1>
+                AI-ready context <span class="gradient">starts here</span>
+              </h1>
+              <p class="hero-lead">
+                Turn messy business data into connected, governed records your assistants can actually
+                reason over — safely, clearly, and without losing control.
+              </p>
+              <div class="hero-actions">
+                <a
+                  class="button button-coral"
+                  href="https://github.com/anythingGraph/AnythingGraph"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Get started free
+                </a>
+                <a class="button button-secondary" href="#integrate">See how it works</a>
+              </div>
+            </div>
+
+            <aside class="hero-play" aria-label="How AnythingGraph works with your AI">
+              <p class="play-title">Connect. Structure. Govern.</p>
+              <p class="play-subtitle">
+                Plug your assistant in through MCP — then give it structured data, real context, and rules
+                it can actually follow.
+              </p>
+              <div class="record-picker" id="record-picker">
+                <button
+                  type="button"
+                  class="record-chip active"
+                  data-result="Point Claude, OpenAI, Cursor, or any MCP host at AnythingGraph — your assistant gets the same governed graph your team uses, without custom glue code."
+                >
+                  <span class="record-icon invoice">🔌</span>
+                  <span>
+                    <strong>Easy MCP integration</strong>
+                    <span>Claude · OpenAI · Cursor · more</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="record-chip"
+                  data-result="Define record types, fields, and relationships once — so your AI works with clear structure instead of messy files and one-off exports."
+                >
+                  <span class="record-icon crm">📊</span>
+                  <span>
+                    <strong>Structure your data</strong>
+                    <span>Records, links, one shared model</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="record-chip"
+                  data-result="Built-in roles and field-level rules flow to every assistant — safer reasoning, controlled access, and answers that respect who is allowed to see what."
+                >
+                  <span class="record-icon doc">🛡️</span>
+                  <span>
+                    <strong>Reasoning &amp; governance</strong>
+                    <span>Guardrails for your own AI</span>
+                  </span>
+                </button>
+              </div>
+              <div class="play-result" id="play-result">
+                Point Claude, OpenAI, Cursor, or any MCP host at AnythingGraph — your assistant gets the
+                same governed graph your team uses, without custom glue code.
+              </div>
+            </aside>
+          </div>
+          <p class="trust-line">We connect the dots. <em>You</em> innovate with AI.</p>
+        </section>
+
+        <div class="marquee-wrap" aria-hidden="true">
+          <div class="marquee">
+            <span class="marquee-item"><span>✦</span> Governed AI access</span>
+            <span class="marquee-item"><span>✦</span> Connected records</span>
+            <span class="marquee-item"><span>✦</span> Playbooks included</span>
+            <span class="marquee-item"><span>✦</span> Self-hostable</span>
+            <span class="marquee-item"><span>✦</span> Fair use license</span>
+            <span class="marquee-item"><span>✦</span> Cursor &amp; Claude ready</span>
+            <span class="marquee-item"><span>✦</span> Governed AI access</span>
+            <span class="marquee-item"><span>✦</span> Connected records</span>
+            <span class="marquee-item"><span>✦</span> Playbooks included</span>
+            <span class="marquee-item"><span>✦</span> Self-hostable</span>
+            <span class="marquee-item"><span>✦</span> Fair use license</span>
+            <span class="marquee-item"><span>✦</span> Cursor &amp; Claude ready</span>
+          </div>
+        </div>
+
+        <section class="section" id="mcp">
+          <div class="section-heading">
+            <span class="section-label">MCP ready</span>
+            <h2>Guardrails built in. Wondering allowed.</h2>
+            <p>
+              Connect the assistants your team already uses. AnythingGraph gives them a clear picture of
+              your records, relationships, and permissions — so they only work with data they are allowed
+              to see.
+            </p>
+          </div>
+          <div class="pillars">
+            <article class="pillar-card coral">
+              <span class="pillar-emoji" aria-hidden="true">🧠</span>
+              <h3>A layer for AI reasoning</h3>
+              <p>
+                Built for Cursor, Claude, and custom agents. Assistants explore your business model, read
+                records, and follow links — the same view your team sees in the dashboard.
+              </p>
+            </article>
+            <article class="pillar-card grape">
+              <span class="pillar-emoji" aria-hidden="true">🛡️</span>
+              <h3>Governance &amp; access control</h3>
+              <p>
+                Built-in roles and per-field visibility. Sensitive values stay hidden from the wrong person
+                or assistant — browsing or exporting.
+              </p>
+            </article>
+            <article class="pillar-card sky">
+              <span class="pillar-emoji" aria-hidden="true">⚡</span>
+              <h3>Easy to integrate</h3>
+              <p>
+                Install starter playbooks in minutes, plug in your AI tools, and keep your existing CRM or
+                warehouse. AnythingGraph sits alongside what you already run.
+              </p>
+            </article>
+            <article class="pillar-card sun">
+              <span class="pillar-emoji" aria-hidden="true">🔗</span>
+              <h3>Connected by design</h3>
+              <p>
+                Define record types and links once — customers to orders, contacts to accounts, documents
+                to cases — and explore the full picture on a visual graph.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="integrate">
+          <div class="section-heading">
+            <span class="section-label">Integrate</span>
+            <h2>Start. Connect. Go.</h2>
+            <p>
+              Run locally with one script, connect your AI assistant, and start working with governed,
+              connected data the same day.
+            </p>
+          </div>
+          <div class="steps-panel">
+            <p style="font-weight: 600; color: var(--ink-soft)">Works with tools you already love:</p>
+            <div class="chip-row">
+              <span class="stack-chip">Dashboard</span>
+              <span class="stack-chip">Playbooks</span>
+              <span class="stack-chip">Workflows</span>
+              <span class="stack-chip">AI connection</span>
+              <span class="stack-chip">Cursor</span>
+              <span class="stack-chip">Claude</span>
+            </div>
+            <div class="steps-grid">
+              <div class="step-card">
+                <div class="step-number">1</div>
+                <h3>Start the platform</h3>
+                <p>One command runs everything on your machine.</p>
+              </div>
+              <div class="step-card">
+                <div class="step-number">2</div>
+                <h3>Connect your assistant</h3>
+                <p>Point your AI tool at AnythingGraph.</p>
+              </div>
+              <div class="step-card">
+                <div class="step-number">3</div>
+                <h3>Pick a playbook</h3>
+                <p>CRM, invoices, or your own record types.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="ontology">
+          <div class="section-heading">
+            <span class="section-label">Connected data</span>
+            <h2>Your business, mapped — not buried in spreadsheets.</h2>
+            <p>
+              AnythingGraph is a context layer, not another silo. Define what a customer, invoice, or ticket
+              means once, link records the way your business works, and let people and assistants explore the
+              same map.
+            </p>
+          </div>
+          <div class="pillars">
+            <article class="pillar-card grape">
+              <span class="pillar-emoji" aria-hidden="true">📋</span>
+              <h3>Clear record types</h3>
+              <p>
+                Fields, required values, and identifiers — plus descriptions and examples so AI extraction
+                stays accurate.
+              </p>
+            </article>
+            <article class="pillar-card sky">
+              <span class="pillar-emoji" aria-hidden="true">🕸️</span>
+              <h3>Relationship graph</h3>
+              <p>
+                Link accounts to contacts, orders to customers, documents to cases. See how it all fits
+                together.
+              </p>
+            </article>
+            <article class="pillar-card mint" style="background: var(--mint-soft)">
+              <span class="pillar-emoji" aria-hidden="true">💬</span>
+              <h3>Ask questions over your data</h3>
+              <p>
+                Explore visually or ask in plain language — without a new report for every question.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="use-cases">
+          <div class="section-heading">
+            <span class="section-label">Use cases</span>
+            <h2>Real workflows. Repeatable patterns.</h2>
+            <p>
+              From document extraction to everyday operations — install a playbook and adapt it to your team.
+            </p>
+          </div>
+          <div class="use-case-grid">
+            <article class="use-case-card">
+              <h3>Structured AI data extraction</h3>
+              <p>
+                Map PDFs, emails, and exports into validated records — then review exceptions in a landing
+                zone.
+              </p>
+              <div class="tag-list">
+                <span class="tag">Automation</span>
+                <span class="tag">Document intake</span>
+                <span class="tag">Human review</span>
+              </div>
+            </article>
+            <article class="use-case-card">
+              <h3>One connected view</h3>
+              <p>
+                Unify CRM, finance, and ops into one picture. Share it with your team and assistants.
+              </p>
+              <div class="tag-list">
+                <span class="tag">Connected records</span>
+                <span class="tag">Graph explorer</span>
+                <span class="tag">Cross-team</span>
+              </div>
+            </article>
+            <article class="use-case-card">
+              <h3>Data governance for AI</h3>
+              <p>
+                Decide who sees salary, amounts, or personal data. Assistants inherit those rules
+                automatically.
+              </p>
+              <div class="tag-list">
+                <span class="tag">Role-based access</span>
+                <span class="tag">Field rules</span>
+                <span class="tag">Safe exports</span>
+              </div>
+            </article>
+            <article class="use-case-card">
+              <h3>Lightweight CRM &amp; ops</h3>
+              <p>
+                Install CRM or invoice playbooks, link accounts to tickets, and let AI work on the same
+                model your team edits.
+              </p>
+              <div class="tag-list">
+                <span class="tag">Playbooks</span>
+                <span class="tag">Record hub</span>
+                <span class="tag">Integrations</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="cta-banner">
+            <div>
+              <h2>Ready to give AI a brain — with boundaries?</h2>
+              <p>
+                Fair use licensed and free for non-commercial use. Run everything locally, customize
+                playbooks, or connect your own workflows. Commercial use needs a separate license.
+              </p>
+            </div>
+            <a
+              class="button button-coral"
+              href="https://github.com/anythingGraph/AnythingGraph"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Star on GitHub ★
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="footer-inner">
+          <span>© AnythingGraph — governed, connected data for AI assistants.</span>
+          <a href="https://github.com/anythingGraph/AnythingGraph" target="_blank" rel="noopener noreferrer">
+            github.com/anythingGraph/AnythingGraph
+          </a>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      // Wire up hero feature picker (MCP, structure, governance).
+      (function initRecordPicker() {
+        var picker = document.getElementById("record-picker");
+        var resultBox = document.getElementById("play-result");
+        if (!picker || !resultBox) {
+          return;
+        }
+
+        var chips = picker.querySelectorAll(".record-chip");
+        for (var index = 0; index < chips.length; index += 1) {
+          chips[index].addEventListener("click", function handleChipClick() {
+            for (var chipIndex = 0; chipIndex < chips.length; chipIndex += 1) {
+              chips[chipIndex].classList.remove("active");
+            }
+            this.classList.add("active");
+            resultBox.textContent = this.getAttribute("data-result") || "";
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
