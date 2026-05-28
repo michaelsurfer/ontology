@@ -9,6 +9,8 @@ Major components live in separate repositories and are linked here as **submodul
 | `mcp-service/` | https://github.com/anythingGraph/anythingGraph-mcp-service |
 | `website/` | https://github.com/anythingGraph/website |
 
+The monorepo lives at [anythingGraph/AnythingGraph](https://github.com/anythingGraph/AnythingGraph). A personal mirror may also exist at [K-Murti/ontology](https://github.com/K-Murti/ontology) (GitHub username: **K-Murti**).
+
 ## Clone
 
 ```bash

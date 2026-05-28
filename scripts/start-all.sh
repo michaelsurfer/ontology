@@ -35,6 +35,25 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM EXIT
 
+# Free a local TCP port if a previous AnythingGraph process is still bound.
+free_port() {
+  local port_number="$1"
+  local process_ids
+  process_ids=$(lsof -ti :"$port_number" 2>/dev/null || true)
+  if [ -z "$process_ids" ]; then
+    return 0
+  fi
+  echo "Freeing port ${port_number} (stopping existing listener)..."
+  # shellcheck disable=SC2086
+  kill -TERM $process_ids 2>/dev/null || true
+  sleep 1
+  process_ids=$(lsof -ti :"$port_number" 2>/dev/null || true)
+  if [ -n "$process_ids" ]; then
+    # shellcheck disable=SC2086
+    kill -KILL $process_ids 2>/dev/null || true
+  fi
+}
+
 # Run a command in a service directory with prefixed log lines.
 start_service() {
   local service_name="$1"
@@ -85,12 +104,20 @@ fi
 echo "AnythingGraph — starting all services from ${ROOT_DIR}"
 echo ""
 
-# 1–2: Rust services (dashboard and MCP depend on these URLs).
+free_port 8182
+free_port 8181
+free_port 8183
+
+# 1–3: Rust services (dashboard and MCP depend on these URLs).
 start_service "data-layer" "core-services/data-layer-service" cargo run
 start_service "rdf-cache" "core-services/rdf-cache-service" cargo run
 
 wait_for_port 8182 "data-layer-service"
 wait_for_port 8181 "rdf-cache-service"
+
+start_service "connector" "core-services/connector-service" cargo run
+
+wait_for_port 8183 "connector-service"
 
 # 3–4: Dashboard API + UI (uses concurrently in dashboard/package.json).
 start_service "dashboard" "dashboard" npm run dev
@@ -104,6 +131,7 @@ echo "  Dashboard UI:      http://127.0.0.1:5183"
 echo "  Dashboard API:     http://127.0.0.1:5180"
 echo "  data-layer:        http://127.0.0.1:8182"
 echo "  rdf-cache:         http://127.0.0.1:8181"
+echo "  connector-service: http://127.0.0.1:8183"
 echo "  mcp-service:       stdio (configure Cursor → Settings → MCP or .cursor/mcp.json)"
 echo ""
 echo "Press Ctrl+C to stop all services."
